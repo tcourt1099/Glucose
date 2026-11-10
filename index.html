@@ -163,6 +163,9 @@ dialog{background:#0d1328}
 .pf{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:6px 14px}
 @media (max-width:720px){.seg button{padding:7px 9px;font-size:15px}}
 #thRat{height:170px}
+details{margin:8px 0}
+summary{padding:10px 14px;background:var(--card);border:1px solid var(--line);border-radius:12px;cursor:pointer;font-size:16px}
+details[open] summary{margin-bottom:8px}
 </style>
 </head>
 <body>
@@ -253,7 +256,7 @@ function demoV(t){const d=new Date(t),h=d.getHours()+d.getMinutes()/60,k=Math.fl
 let PR=null,TX=[],TB=[],LP={},PF=null,errCode=0;
 const prOK=()=>PR&&Date.now()-PR.t<30*6e4;
 const at=(a,t)=>{const d=new Date(t),q=d.getHours()*3600+d.getMinutes()*60;let v=a[0][1];for(const b of a){if(b[0]<=q)v=b[1]}return v};
-const schedAt=t=>PF&&PF.basal.length?at(PF.basal,t):0;
+const schedAt=t=>{const P=(typeof CPF!=='undefined'&&CPF&&CPF.basal.length)?CPF:PF;return P&&P.basal.length?at(P.basal,t):0};
 function cleanUrl(u){u=(u||'').trim();if(!u)return{url:'',token:''};if(!/^https?:\/\//i.test(u))u='https://'+u;
   try{const x=new URL(u);return{url:x.origin+x.pathname.replace(/\/(api(\/.*)?)?$/,'').replace(/\/+$/,''),token:x.searchParams.get('token')||''}}catch(e){return{url:u.replace(/\/+$/,''),token:''}}}
 function parseDS(a){PR=null;LP={};
@@ -267,7 +270,7 @@ function parseDS(a){PR=null;LP={};
       LP={iob:l.iob&&l.iob.iob,cob:l.cob&&l.cob.cob,ev:p&&p.values?p.values[p.values.length-1]:null,t:new Date(l.timestamp||s.created_at).getTime(),...extra};break}}}
 function parseProfile(a){try{const q=a[0],st=q.store[q.defaultProfile]||Object.values(q.store)[0],mm=/mmol/i.test(st.units||'')?18.0182:1;
   const m=(arr,k)=>(arr||[]).map(e=>{let t=e.timeAsSeconds;if(t==null){const[h,mi]=String(e.time).split(':');t=h*3600+mi*60}return[+t,+e.value*k]}).sort((x,y)=>x[0]-y[0]);
-  PF={basal:m(st.basal,1),sens:m(st.sens,mm),cr:m(st.carbratio,1),tlo:m(st.target_low,mm),thi:m(st.target_high,mm)};PFx={name:q.defaultProfile,dia:st.dia,tz:st.timezone,units:st.units||q.units||'',start:q.startDate||q.created_at}}catch(e){}}
+  PF={basal:m(st.basal,1),sens:m(st.sens,mm),cr:m(st.carbratio,1),tlo:m(st.target_low,mm),thi:m(st.target_high,mm)};PFns=PF;if(typeof CPF!=='undefined'&&CPF&&CPF.basal.length)PF=CPF;PFx={name:q.defaultProfile,dia:st.dia,tz:st.timezone,units:st.units||q.units||'',start:q.startDate||q.created_at}}catch(e){}}
 function parseTreat(tr){const nt=[],nb=[],np=[];tr.forEach(e=>{const t=new Date(e.created_at||e.timestamp||e.date).getTime();if(!t)return;const ty=e.eventType||'';
   if(/site change|insulin change|pod/i.test(ty)&&!/battery/i.test(ty))np.push({t});
   if(/temp basal/i.test(ty)){const r=e.rate!=null?+e.rate:(e.absolute!=null?+e.absolute:null);if(r!=null)nb.push({t,rate:r,dur:+e.duration||0})}
@@ -734,6 +737,7 @@ function renderTherapy(){
     if(num('asMax')&&mx>=num('asMax')-.005)fl.push(['warn','Autosens reached your max of '+num('asMax')+' in the last day.'])}
   const io=TS.map(x=>x.iob).filter(x=>x!=null);if(num('maxIOB')&&io.length&&Math.max(...io)>=.9*num('maxIOB'))fl.push(['warn','IOB reached '+fx(Math.max(...io),1)+' U, at least 90% of Max IOB ('+num('maxIOB')+' U). The loop may have been held back.']);
   const sb=TS.filter(x=>x.smb>0);if(num('smbMin')&&sb.length>=5&&PF&&PF.basal.length){const hit=sb.filter(x=>{const d=new Date(x.t);return x.smb>=.95*atS(PF.basal,d.getHours()*3600+d.getMinutes()*60)*(x.r||1)*num('smbMin')/60}).length;if(hit/sb.length>=.4)fl.push(['warn',fx(hit/sb.length*100,0)+'% of SMBs in the last day were at the Max SMB Basal Minutes cap.'])}
+  csvChecks().forEach(x=>fl.push(x));logObs().forEach(x=>fl.push(x));
   INSOBS.filter(x=>x[0]).forEach(x=>fl.push(x));
   const isfP=PF&&PF.sens.length?atS(PF.sens,q):null,crP=PF&&PF.cr.length?atS(PF.cr,q):null,bsP=PF&&PF.basal.length?atS(PF.basal,q):null,r=L0.r!=null?L0.r:LP.sr;
   let tot=0;if(PF&&PF.basal.length)PF.basal.forEach((b,i)=>{tot+=b[1]*(((PF.basal[i+1]||[86400])[0])-b[0])/3600});
@@ -744,9 +748,10 @@ function renderTherapy(){
   const pf=TP.map(([t,f])=>`<h2>${t}</h2><div class="pf">`+f.map(([k,l,u])=>u==='b'?`<label>${l}<select data-k="${k}"><option value="">Not set</option><option value="1">On</option><option value="0">Off</option></select></label>`:`<label>${l}${u?' ('+u+')':''}<input data-k="${k}" inputmode="decimal" placeholder="Not set"></label>`).join('')+'</div>').join('');
   el.innerHTML='<h2>Settings review</h2>'+(fl.length?'<ul class="obs">'+fl.map(([c,t])=>`<li class="${c}">${t}</li>`).join('')+'</ul>':'<div class="card"><span>Nothing stands out right now.</span></div>')+'<div class="note">Patterns in your data, not medical advice. Talk to your care team before changing settings.</div>'+
    '<h2>Right now</h2><div class="cards">'+now.map(([v,l])=>cd(v,l)).join('')+'</div>'+
-   '<h2>Pump profile from Nightscout'+(PFx&&PFx.name?' ('+PFx.name+')':'')+'</h2>'+(prow.length?tbl(['From','Basal','ISF','Carb ratio','Target'],prow):'<div class="card"><span>No profile found in Nightscout.</span></div>')+
-   '<h2>Autosens, last day</h2><div class="cards">'+cd(ra.length?fx(avg(ra),2):'--','Average ratio')+cd(ra.length?fx(Math.min(...ra),2)+' – '+fx(Math.max(...ra),2):'--','Range')+cd(ra.length?fx(ra.filter(x=>x>1.05).length/ra.length*100,0)+'%':'--','Time above 1.05')+cd(ra.length?fx(ra.filter(x=>x<.95).length/ra.length*100,0)+'%':'--','Time below 0.95')+cd(sm.length,'SMBs')+cd(sm.length?fx(avg(sm.map(x=>x.smb)),2)+' U':'--','Average SMB')+'</div><canvas id="thRat" class="r"></canvas><div class="note">Autosens ratio over the last day. Above 1 means Trio is giving more insulin than your profile, below 1 less. The dashed lines are 1.0 and your Autosens limits if you entered them below.</div>'+
+   '<h2>Pump profile'+(CPF?' (Trio export)':' from Nightscout'+(PFx&&PFx.name?' ('+PFx.name+')':''))+'</h2>'+(prow.length?tbl(['From','Basal','ISF','Carb ratio','Target'],prow):'<div class="card"><span>No profile found in Nightscout.</span></div>')+
+   importHTML()+settingsHTML()+logHTML()+'<h2>Autosens, last day</h2><div class="cards">'+cd(ra.length?fx(avg(ra),2):'--','Average ratio')+cd(ra.length?fx(Math.min(...ra),2)+' – '+fx(Math.max(...ra),2):'--','Range')+cd(ra.length?fx(ra.filter(x=>x>1.05).length/ra.length*100,0)+'%':'--','Time above 1.05')+cd(ra.length?fx(ra.filter(x=>x<.95).length/ra.length*100,0)+'%':'--','Time below 0.95')+cd(sm.length,'SMBs')+cd(sm.length?fx(avg(sm.map(x=>x.smb)),2)+' U':'--','Average SMB')+'</div><canvas id="thRat" class="r"></canvas><div class="note">Autosens ratio over the last day. Above 1 means Trio is giving more insulin than your profile, below 1 less. The dashed lines are 1.0 and your Autosens limits if you entered them below.</div>'+
    '<h2>Trio algorithm settings</h2><div class="note" style="margin-bottom:8px">Nightscout holds your profile, but Trio does not upload its algorithm preferences. Enter them once from Trio’s Settings screens. They are saved on this device and used for the checks above.</div>'+pf+'<button id="thSave" class="on" style="margin-top:12px">Save settings</button>';
+  wireImports();
   el.querySelectorAll('[data-k]').forEach(i=>{if(TPV[i.dataset.k]!=null)i.value=TPV[i.dataset.k]});
   $('thSave').onclick=()=>{el.querySelectorAll('[data-k]').forEach(i=>{const v=i.value.trim();if(v==='')delete TPV[i.dataset.k];else TPV[i.dataset.k]=v});try{localStorage.setItem('gs_trio',JSON.stringify(TPV))}catch(e){}renderTherapy()};
   thDraw=()=>{const c=$('thRat');if(!c||!c.offsetWidth||!rv.length)return;const[g,W,H]=fit(c),L=34,B=20,T=8,t0=TS[0].t,t1=n;let lo=Math.min(.7,...ra)-.05,hi=Math.max(1.3,...ra)+.05;if(num('asMin'))lo=Math.min(lo,num('asMin')-.05);if(num('asMax'))hi=Math.max(hi,num('asMax')+.05);
@@ -754,6 +759,69 @@ function renderTherapy(){
     [1,num('asMax'),num('asMin')].forEach((v,i)=>{if(v==null)return;g.strokeStyle=i?'rgba(255,200,87,.7)':'rgba(200,214,255,.3)';g.setLineDash([4,4]);g.beginPath();g.moveTo(L,Y(v));g.lineTo(W-6,Y(v));g.stroke();g.setLineDash([]);g.fillText(fx(v,2),L-4,Y(v))});
     g.strokeStyle='#a78bfa';g.lineWidth=2;g.beginPath();rv.forEach((x,i)=>i?g.lineTo(X(x.t),Y(x.r)):g.moveTo(X(x.t),Y(x.r)));g.stroke();g.lineWidth=1;g.textAlign='center';g.textBaseline='top';for(let k=0;k<=4;k++){const t=t0+k*(t1-t0)/4;g.fillText(hr(t),X(t),H-B+4)}};
   thDraw()}
+/* ===== Trio settings export + log analysis ===== */
+let TCSV=null,CPF=null,PFns=null,LOGL=[],TDDS=[];
+try{TCSV=JSON.parse(localStorage.getItem('gs_csv')||'null')}catch(e){}
+const CMAP=[['Maximum Insulin on Board (IOB)','maxIOB','n'],['Maximum Bolus','maxBolus','n'],['Maximum Basal Rate','maxBasal','n'],['Maximum Carbs on Board (COB)','maxCOB','n'],['Minimum Safety Threshold','thresh','n'],['Autosens Max','asMax','p'],['Autosens Min','asMin','p'],['Rewind Resets Autosens','rewind','b'],['Enable SMB Always','smbAlways','b'],['Enable SMB With COB','smbCOB','b'],['Enable SMB With Temptarget','smbTT','b'],['Enable SMB After Carbs','smbAfter','b'],['Enable SMB With High Glucose','smbHighBG','b'],['Allow SMB With High Temptarget','smbHighTT','b'],['Enable UAM','uam','b'],['Max SMB Basal Minutes','smbMin','n'],['Max UAM Basal Minutes','uamMin','n'],['Max Allowed Glucose Rise for SMB','smbDelta','n'],['Dynamic ISF','dynISF','d'],['Sigmoid Adjustment Factor','af','p'],['Weighted Average of TDD','tddW','n'],['Adjust Basal','adjBasal','b'],['High Temptarget Raises Sensitivity','hiTT','b'],['Low Temptarget Lowers Sensitivity','loTT','b'],['Sensitivity Raises Target','sensTarget','b'],['Resistance Lowers Target','resTarget','b'],['Half Basal Exercise Target','halfBasal','n'],['Max Daily Safety Multiplier','maxDailySafety','p'],['Current Basal Safety Multiplier','curBasalSafety','p'],['Duration of Insulin Action','dia','n'],['Insulin Peak Time','peak','n'],['Skip Neutral Temps','skipNeutral','b'],['Unsuspend If No Temp','unsusp','b'],['Suspend Zeros IOB','suspZero','b'],['SMB Delivery Ratio','smbRatio','p'],['SMB Interval','smbInt','n'],['Min 5m Carb Impact','minCI','n'],['Remaining Carbs Percentage','rcFrac','p'],['Remaining Carbs Cap','rcCap','n'],['Noisy CGM Target Increase','noisy','p'],['Insulin Type','curve','s'],['Max Carbs','maxCarbs','n']];
+function csvRows(t){return t.replace(/^\uFEFF/,'').split(/\r?\n/).filter(Boolean).map(l=>{const o=[];let c='',q=false;for(const ch of l){if(ch==='"')q=!q;else if(ch===','&&!q){o.push(c);c=''}else c+=ch}o.push(c);return o})}
+function applyCSV(rows,save){
+  if(save!==false){const it=rows.slice(1).map(r=>({cat:r[0],sub:r[1],name:r[2],val:r[3],unit:r[4]||''})),g=n=>(it.find(x=>x.name===n)||{}).val;
+    TCSV={rows:it,when:g('Export Date')||'',meta:['Trio '+(g('App Version')||''),g('Pump Type'),g('Insulin Type'),g('Dosing Mode'),'exported '+(g('Export Date')||'')].filter(Boolean).join(' · ')};try{localStorage.setItem('gs_csv',JSON.stringify(TCSV))}catch(e){}}
+  if(!TCSV)return;const it=TCSV.rows;
+  CMAP.forEach(([nm,k,kind])=>{const x=it.find(r=>r.name===nm);if(!x)return;let v=x.val;
+    if(kind==='b')v=v==='Enabled'?'1':'0';else if(kind==='p')v=String(parseFloat(v)/100);else if(kind==='d'){TPV.sigmoid=/sigmoid/i.test(v)?'1':'0';v=/disabled/i.test(v)?'0':'1'}
+    TPV[k]=v});try{localStorage.setItem('gs_trio',JSON.stringify(TPV))}catch(e){}
+  const tm=n=>{const m=n.match(/\((\d+):(\d+)\)/);return m?m[1]*3600+m[2]*60:0},gp=(sub,pre)=>it.filter(x=>x.sub===sub&&x.name.startsWith(pre)).map(x=>[tm(x.name),parseFloat(x.val)]).sort((a,b)=>a[0]-b[0]);
+  const tg=gp('Glucose Targets','Target');CPF={basal:gp('Basal Rates','Basal Rate'),cr:gp('Carb Ratios','Carb Ratio'),sens:gp('Insulin Sensitivities','ISF'),tlo:tg,thi:tg};
+  PF=CPF;PFx=PFx||{name:'Trio export',dia:TPV.dia,tz:'',units:'mg/dL',start:TCSV.when}}
+function csvChecks(){const o=[];if(!TCSV)return o;const g=n=>(TCSV.rows.find(r=>r.name===n)||{}).val,nm=n=>{const v=parseFloat(g(n));return isNaN(v)?null:v};
+  const dia=nm('Duration of Insulin Action');if(dia>=7)o.push(['warn','DIA is set to '+dia+' h. Rapid insulin like '+(g('Insulin Type')||'yours')+' is usually modeled closer to 5 to 6 h. A long DIA makes IOB linger, which can hold back SMBs and temps. Worth discussing with your care team.']);
+  const sm=nm('Max SMB Basal Minutes'),um=nm('Max UAM Basal Minutes');if(sm&&(CPF||PF)&&(CPF||PF).basal.length){const mb=Math.max(...(CPF||PF).basal.map(b=>b[1]));o.push(['','Max SMB Basal Minutes is '+sm+', so one SMB can be up to about '+fx(mb*sm/60,1)+' U at your highest basal ('+fx(mb,2)+' U/h). UAM is '+um+' minutes.'])}
+  const ex=TCSV.rows.find(r=>/Half Basal Target/.test(r.name)&&parseFloat(r.val)<0);if(ex)o.push(['warn','Your '+ex.sub.trim()+' temp target preset has a half-basal target of '+ex.val+' '+ex.unit+', which looks wrong. Check that preset in Trio.']);
+  const th=nm('Minimum Safety Threshold'),tg=PF&&PF.tlo.length?Math.min(...PF.tlo.map(x=>x[1])):null;if(th&&tg&&tg-th<=10)o.push(['','Your target ('+Math.round(tg)+') and safety threshold ('+th+') are only '+Math.round(tg-th)+' mg/dL apart, so a predicted low near the threshold suspends insulin quickly.']);
+  if(PFns&&CPF&&JSON.stringify(PFns.basal)!==JSON.stringify(CPF.basal))o.push(['warn','Your Nightscout profile basal differs from your Trio export. Check that both are current.']);return o}
+function parseLogs(texts){const loops=[],tdds=[],seen=new Set();
+  texts.forEach(tx=>{const L=tx.split('\n');for(let i=0;i<L.length;i++){const l=L[i];
+    if(l.indexOf('OREF DETERMINATION')>=0){const g=re=>{const m=l.match(re);return m?m[1]:null},ts=g(/timestamp: Optional\((\d{4}-\d\d-\d\d \d\d:\d\d:\d\d) \+0000\)/);if(!ts)continue;const t=Date.parse(ts.replace(' ','T')+'Z');if(!t||seen.has(t))continue;seen.add(t);
+      const rs=g(/reason: "([^"]*)"/)||'',im=rs.match(/ISF: ([\d.]+)\s*→\s*([\d.]+)/),n=re=>{const v=g(re);return v==null?null:parseFloat(v)},bm=rs.match(/Basal ratio: ([\d.]+)/);
+      loops.push({t,units:n(/ units: Optional\(([\d.]+)\)/)||0,rate:n(/ rate: Optional\(([\d.]+)\)/),dur:n(/ duration: Optional\((\d+)\)/),iob:n(/ iob: Optional\((-?[\d.]+)\)/),cob:n(/ cob: Optional\((\d+)\)/),bg:n(/ bg: Optional\((\d+)\)/),ev:n(/eventualBG: Optional\((-?\d+)\)/),req:n(/insulinReq: Optional\((-?[\d.]+)\)/),ratio:n(/sensitivityRatio: Optional\(([\d.]+)\)/),isf0:im?+im[1]:null,isf1:im?+im[2]:null,mp:n(/minPredBG: Optional\((-?\d+)\)/),mg:n(/minGuardBG: Optional\((-?\d+)\)/),th:n(/threshold: Optional\((\d+)\)/),br:bm?+bm[1]:null,rs})}
+    else if(l.indexOf('TDD Summary:')>=0){const d={t:Date.parse(l.slice(0,24).replace(/([+-]\d\d)(\d\d)$/,'$1:$2'))};for(let j=i+1;j<Math.min(L.length,i+14);j++){const m=L[j].match(/\|\s*(Total|Bolus|Temp Basal|Scheduled Basal|Weighted Average)\s*\|\s*([\d.]+)/);if(m)d[m[1]]=parseFloat(m[2])}if(d.Total!=null&&d.t)tdds.push(d)}}});
+  return{loops,tdds}}
+function mergeLogs(r){const m=new Map(LOGL.map(x=>[x.t,x]));r.loops.forEach(x=>m.set(x.t,x));LOGL=[...m.values()].sort((a,b)=>a.t-b.t);const q=new Map(TDDS.map(x=>[x.t,x]));r.tdds.forEach(x=>q.set(x.t,x));TDDS=[...q.values()].sort((a,b)=>a.t-b.t);idbSet('triolog',{l:LOGL,t:TDDS})}
+const TNum=k=>TPV[k]!=null&&TPV[k]!==''?parseFloat(TPV[k]):null;
+function logStats(){const L=LOGL;if(L.length<10)return null;const sm=L.filter(x=>x.units>0),smT=sm.reduce((a,x)=>a+x.units,0),span=Math.max(.1,(L[L.length-1].t-L[0].t)/DAY),bk=Array.from({length:8},()=>({s:0,t:0,m:0}));
+  let cur=null,zr=0,lo=0,hi=0,nc=0,rl=0,cl=0,rn=0,cn=0;const smR=TNum('smbRatio'),smM=TNum('smbMin');
+  for(let i=0;i<L.length;i++){const x=L[i],nx=L[i+1],dt=Math.min(nx?(nx.t-x.t)/6e4:5,10),d=new Date(x.t),q=d.getHours()*3600+d.getMinutes()*60,sc=((CPF&&CPF.basal.length)?atS(CPF.basal,q):PF&&PF.basal.length?atS(PF.basal,q):0);
+    if(x.rate!=null)cur={r:x.rate,u:x.t+(x.dur||30)*6e4};const r=cur&&x.t<cur.u?cur.r:sc,b=bk[Math.floor(d.getHours()/3)];b.s+=sc*dt/60;b.t+=r*dt/60;b.m+=x.units;
+    if(r<=.05)zr++;else if(sc&&r<sc*.8)lo++;else if(sc&&r>sc*1.2)hi++;else nc++;
+    if(x.units>0&&x.req!=null&&smR&&smM&&sc){rn++;if(Math.abs(x.units-x.req*smR)<=.06)rl++;else if(x.units>=.95*sc*(x.ratio||1)*smM/60)cl++}}
+  const n=L.length,ra=L.map(x=>x.ratio).filter(x=>x!=null),io=L.map(x=>x.iob).filter(x=>x!=null),i1=L.map(x=>x.isf1).filter(x=>x),i0=L.map(x=>x.isf0).filter(x=>x),asM=TNum('asMax'),asN=TNum('asMin'),mg=L.filter(x=>x.mg!=null&&x.th!=null);
+  const S0=bk.reduce((a,b)=>a+b.s,0),T0=bk.reduce((a,b)=>a+b.t,0),M0=bk.reduce((a,b)=>a+b.m,0);
+  const byDay={};TDDS.forEach(x=>{byDay[new Date(x.t).toDateString()]=x});
+  return{n,span,sm:sm.length,smT,smAvg:sm.length?smT/sm.length:null,smMax:sm.length?Math.max(...sm.map(x=>x.units)):null,pSm:sm.length/n*100,zr:zr/n*100,lo:lo/n*100,hi:hi/n*100,nc:nc/n*100,ra,raAvg:avg(ra),atMax:asM&&ra.length?ra.filter(x=>x>=asM-.005).length/ra.length*100:null,atMin:asN&&ra.length?ra.filter(x=>x<=asN+.005).length/ra.length*100:null,isf1:avg(i1),isf0:avg(i0),iobAvg:avg(io),iobMax:io.length?Math.max(...io):null,low:mg.length?mg.filter(x=>x.mg<x.th).length/mg.length*100:null,bk,tp:S0?T0/S0*100:null,np:S0?(T0+M0)/S0*100:null,rl:rn?rl/rn*100:null,cl:rn?cl/rn*100:null,rn,tdd:Object.values(byDay).slice(-8).reverse(),last:TDDS[TDDS.length-1]}}
+function logObs(){const o=[],st=LOGL.length?logStats():null;if(!st)return o;
+  if(st.tp!=null)o.push(['','From your logs: temp basal delivered '+fx(st.tp,0)+'% of scheduled basal, and '+fx(st.np,0)+'% once SMBs are counted.']);
+  if(st.cl!=null&&st.cl>=30)o.push(['warn',fx(st.cl,0)+'% of SMBs were held to the Max SMB Basal Minutes cap.']);else if(st.rl!=null&&st.rl>=50)o.push(['','Most SMBs ('+fx(st.rl,0)+'%) were sized by the SMB delivery ratio, not the basal-minutes cap.']);
+  if(st.atMax!=null&&st.atMax>=25)o.push(['warn','The sensitivity ratio sat at your Autosens max for '+fx(st.atMax,0)+'% of loops.']);if(st.atMin!=null&&st.atMin>=25)o.push(['warn','The sensitivity ratio sat at your Autosens min for '+fx(st.atMin,0)+'% of loops.']);
+  if(st.zr>=40)o.push(['warn','The loop ran a zero or near-zero temp in '+fx(st.zr,0)+'% of loops.']);
+  const mi=TNum('maxIOB');if(mi&&st.iobMax>=.9*mi)o.push(['warn','IOB reached '+fx(st.iobMax,1)+' U, close to your Max IOB of '+mi+' U.']);
+  if(st.low!=null&&st.low>=20)o.push(['warn','In '+fx(st.low,0)+'% of loops the lowest predicted glucose was under your safety threshold.']);return o}
+const importHTML=()=>'<h2>Import from Trio</h2><div style="display:flex;gap:8px;flex-wrap:wrap"><button id="impCsv">Import settings CSV</button><button id="impLog">Import logs</button></div><input id="fCsv" type="file" accept=".csv,text/csv" hidden><input id="fLog" type="file" multiple hidden><div class="note">In Trio, export your settings and share the log files, then pick them here. They are read on this device and kept in its browser storage only. Nothing is uploaded.'+(TCSV?' Settings imported: '+TCSV.when+'.':'')+(LOGL.length?' Logs: '+LOGL.length.toLocaleString()+' loop runs.':'')+'</div>';
+function settingsHTML(){if(!TCSV)return'';const c={};TCSV.rows.forEach(r=>{(c[r.cat]=c[r.cat]||[]).push(r)});
+  return'<h2>Your Trio settings</h2>'+Object.keys(c).filter(k=>k!=='Metadata').map(k=>`<details><summary>${k}</summary>`+tbl(['Group','Setting','Value'],c[k].map(r=>[r.sub.trim(),r.name,r.val+(r.unit?' '+r.unit:'')]))+'</details>').join('')+'<div class="note">'+TCSV.meta+'</div>'}
+function logHTML(){if(!LOGL.length)return'<h2>Trio loop logs</h2><div class="card"><span>Import your Trio log files above to see SMB, temp basal and TDD analysis from every loop run.</span></div>';
+  const s=logStats();if(!s)return'<h2>Trio loop logs</h2><div class="card"><span>Not enough loop runs in those logs yet.</span></div>';const bl=['12a–3a','3a–6a','6a–9a','9a–12p','12p–3p','3p–6p','6p–9p','9p–12a'],L=s.last;
+  return'<h2>Trio loop logs ('+s.n.toLocaleString()+' loops, '+fx(s.span,1)+' days)</h2><div class="cards">'+
+   cd(s.sm+' · '+fx(s.smT/s.span,1)+' U/d','SMBs delivered')+cd(fx(s.smAvg,2)+' U','Average SMB (max '+fx(s.smMax,2)+')')+cd(fx(s.pSm,0)+'%','Loops with an SMB')+cd(fx(s.zr,0)+'%','Loops at zero temp')+cd(fx(s.lo,0)+'% / '+fx(s.hi,0)+'%','Temp under 80% / over 120% of schedule')+
+   cd(s.raAvg==null?'--':fx(s.raAvg,2),'Average ratio ('+(s.ra.length?fx(Math.min(...s.ra),2)+' to '+fx(Math.max(...s.ra),2):'--')+')')+cd(s.isf1==null?'--':fx(s.isf1,0),'Average effective ISF (profile '+fx(s.isf0,0)+')')+cd(s.iobAvg==null?'--':fx(s.iobAvg,1)+' U','Average IOB (peak '+fx(s.iobMax,1)+')')+(s.low!=null?cd(fx(s.low,0)+'%','Loops predicting a low under threshold'):'')+(L?cd(fx(L.Total,0)+' U','Latest 24 h total ('+fx(L.Bolus/L.Total*100,0)+'% bolus incl. SMB)'):'')+(s.rn?cd(fx(s.rl,0)+'% / '+fx(s.cl,0)+'%','SMBs sized by delivery ratio / held by basal-minutes cap'):'')+'</div>'+
+   '<h2>Net basal from logs: temp + SMB vs schedule</h2>'+tbl(['Block','Scheduled U','Temp U','SMB U','Temp + SMB'],[...s.bk.map((b,i)=>[bl[i],fx(b.s,1),fx(b.t,1),fx(b.m,1),b.s?fx((b.t+b.m)/b.s*100,0)+'%':'--']),['All day',fx(s.bk.reduce((a,b)=>a+b.s,0),1),fx(s.bk.reduce((a,b)=>a+b.t,0),1),fx(s.bk.reduce((a,b)=>a+b.m,0),1),s.np==null?'--':fx(s.np,0)+'%']])+'<div class="note">Totals cover the logged loops only. Because SMBs borrow future basal, compare the last column with 100%.</div>'+
+   (s.tdd.length?'<h2>Daily insulin totals reported by Trio</h2>'+tbl(['Day','Total U','Bolus %','Temp basal %','Weighted avg U'],s.tdd.map(x=>[new Date(x.t).toLocaleDateString([],{weekday:'short',day:'numeric'}),fx(x.Total,1),fx(x.Bolus/x.Total*100,0)+'%',fx(x['Temp Basal']/x.Total*100,0)+'%',fx(x['Weighted Average'],1)])):'')}
+function wireImports(){const pick=(id,fn)=>{$(id).onchange=async e=>{const f=[...e.target.files];if(f.length)await fn(f);e.target.value=''}};
+  $('impCsv').onclick=()=>$('fCsv').click();$('impLog').onclick=()=>$('fLog').click();
+  pick('fCsv',async f=>{applyCSV(csvRows(await f[0].text()));renderTherapy()});
+  pick('fLog',async f=>{$('thStatus').textContent='Reading logs...';const r=parseLogs(await Promise.all(f.map(x=>x.text())));mergeLogs(r);$('thStatus').textContent='Read '+r.loops.length.toLocaleString()+' loop runs and '+r.tdds.length+' TDD summaries.';renderTherapy()})}
+if(TCSV)applyCSV(null,false);
+idbGet('triolog').then(c=>{if(c&&c.l){LOGL=c.l;TDDS=c.t||[];if(!$('therapy').hidden)renderTherapy()}});
 $('test').onclick=testConn;
 load(true);setInterval(()=>load(false),6e4);
 try{if(demo()&&!localStorage.getItem('gs_seen')){localStorage.setItem('gs_seen','1');$('cfg').click()}}catch(e){}
