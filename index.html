@@ -166,15 +166,26 @@ dialog{background:#0d1328}
 details{margin:8px 0}
 summary{padding:10px 14px;background:var(--card);border:1px solid var(--line);border-radius:12px;cursor:pointer;font-size:16px}
 details[open] summary{margin-bottom:8px}
+#hd{display:flex;align-items:center;gap:16px}
+@media (max-width:720px) and (orientation:portrait){
+ header{gap:6px 8px;padding:8px 14px 2px}
+ #hd{display:block;flex:1;min-width:0}
+ #clock{font-size:30px;line-height:1}
+ #date{font-size:13px;margin-top:3px;white-space:nowrap}
+ .lb{display:none}
+ #nsBtn,#cfg{width:42px;height:42px;padding:0;font-size:20px;display:grid;place-items:center}
+ header .seg{gap:0}
+ header .seg button{flex:1;padding:8px 2px;font-size:14px}
+}
 </style>
 </head>
 <body>
 <div id="app">
 <header>
-  <div id="clock"></div><div id="date"></div>
+  <div id="hd"><div id="clock"></div><div id="date"></div></div>
   <span class="seg"><button id="tNow" class="on">Now</button><button id="tRep">Reports</button><button id="tIns">Insights</button><button id="tTh">Therapy</button></span>
   <div id="status"></div>
-  <button id="nsBtn">Night</button><button id="fs" aria-label="Fullscreen">⛶</button><button id="cfg">Settings</button>
+  <button id="nsBtn" aria-label="Night mode">🌙<span class="lb"> Night</span></button><button id="fs" aria-label="Fullscreen">⛶</button><button id="cfg" aria-label="Settings">⚙<span class="lb"> Settings</span></button>
 </header>
 <main id="now">
   <div id="left">
@@ -184,7 +195,7 @@ details[open] summary{margin-bottom:8px}
     <div id="chips"></div><div id="reason"></div>
   </div>
   <div id="right">
-    <div id="bar"><span id="rb" class="seg"></span><span id="legend"></span><span id="selinfo">Touch the chart to read a value</span></div>
+    <div id="bar"><span id="rb" class="seg"></span><span id="vw" class="seg"><button id="vG" class="on">Glucose</button><button id="vB">IOB · COB</button></span><span id="legend"></span><span id="selinfo">Touch the chart to read a value</span></div>
     <canvas id="chart"></canvas>
   </div>
 </main>
@@ -341,7 +352,7 @@ async function load(full){
       if(!j){errCode=he;throw he||1}
       const m=new Map(D.map(e=>[e.t,e]));j.forEach(e=>{if(e.sgv>0)m.set(e.date,{t:e.date,v:e.sgv})});
       D=[...m.values()].sort((a,b)=>a.t-b.t).filter(e=>e.t>Date.now()-15*864e5);
-      if(ds)parseDS(ds);if(tr)parseTreat(tr);if(pf)parseProfile(pf)}
+      if(ds){parseDS(ds);mergeTS(parseTS(ds))}if(tr)parseTreat(tr);if(pf)parseProfile(pf)}
     ok=true;errCode=0}catch(e){ok=false}
   render();if(alarmOn)beep()}
 
@@ -378,6 +389,7 @@ const hr=t=>new Date(t).toLocaleTimeString([],{hour:'numeric'});
 const LC={IOB:'#8fa8ff',COB:'#ffb066',UAM:'#f2dd5c',ZT:'#c084fc',Loop:'#a78bfa'};
 const geo=()=>{const now=Date.now(),fut=prOK()?(range<=3?1.5:range<=6?2:range<=12?3:4):.2;return{now,t0:now-range*36e5,t1:now+fut*36e5}};
 function drawChart(){
+  if(bview){drawBal();return}
   const[g,W,H]=fit($('chart')),{now,t0,t1}=geo(),L=42,R=10,T=8,B=26,lane=(TB.length||PF)?46:0,PB=H-B-lane;
   const vis=D.filter(e=>e.t>=t0);let ymax=Math.max(260,...vis.map(e=>e.v+10));const lines=[];
   if(prOK())for(const k in PR.lines){const pts=PR.lines[k].map((v,i)=>({t:PR.t+i*3e5,v})).filter(q=>q.t<=t1&&q.t>=now-6e5);lines.push([k,pts]);pts.forEach(q=>{ymax=Math.max(ymax,Math.min(q.v+10,400))})}
@@ -566,7 +578,7 @@ function buildSlices(){const n=Date.now();RS=Math.floor((n-185*DAY)/3e5)*3e5;con
   LG.forEach(e=>{const i=sl(e.t);if(i>=0&&i<N)GA[i]=e.v});
   for(let k=0;k<LTB.length;k++){const e=LTB[k],nx=LTB[k+1];if(!(e.dur>0))continue;const end=Math.min(e.t+e.dur*6e4,nx?nx.t:1e18,n);for(let i=Math.max(0,Math.ceil((e.t-RS)/3e5));i<N&&RS+i*3e5<end;i++)RA[i]=e.rate}
   for(let i=0;i<N;i++){SA[i]=schedAt(RS+i*3e5);HR[i]=new Date(RS+i*3e5).getHours()}
-  LXT.forEach(e=>{if(e.smb&&e.ins>0){const i=sl(e.t);if(i>=0&&i<N)SB[i]+=e.ins}if(e.carb>0||(e.ins>0&&!e.smb)){const i=sl(e.t);for(let j=Math.max(0,i);j<Math.min(N,i+48);j++)MK[j]=1}})}
+  LXT.forEach(e=>{if(e.smb&&e.ins>0){const i=sl(e.t);if(i>=0&&i<N)SB[i]+=e.ins}if(e.carb>0||(e.ins>0&&!e.smb)){const i=sl(e.t);for(let j=Math.max(0,i);j<Math.min(N,i+72);j++)MK[j]=1}})}
 function insStat(d){const n=Date.now(),t0=Math.max(n-d*DAY,LG.length?LG[0].t:0),days=Math.max(1,(n-t0)/DAY);let bas=0;
   for(let i=Math.max(0,sl(t0));i<GA.length;i++)bas+=(isNaN(RA[i])?SA[i]:RA[i])/12;
   let bol=0,smb=0,car=0,ns=0,nb=0;LXT.forEach(e=>{if(e.t>=t0){if(e.smb){smb+=e.ins;ns++}else if(e.ins>0){bol+=e.ins;nb++}car+=e.carb}});
@@ -632,7 +644,7 @@ function renderInsights(){
   const i0=Math.max(0,sl(n-d*DAY)),hs=new Float64Array(24),hq=new Float64Array(24),hd=new Float64Array(24),hm=new Float64Array(24);let up=0,dn=0,zr=0,cc=0,tAll=0,sAll=0,smT=0;
   for(let i=i0;i<GA.length;i++){const h=HR[i],r=isNaN(RA[i])?SA[i]:RA[i];hs[h]+=SA[i];hq[h]++;hm[h]+=SB[i];smT+=SB[i];tAll+=r;sAll+=SA[i];if(!isNaN(RA[i])){hd[h]+=RA[i];cc++;if(RA[i]===0)zr++}}
   const tPct=sAll?tAll/sAll*100:null,nPct=sAll?(tAll/12+smT)/(sAll/12)*100:null;
-  const frow=fr.map((o,i)=>[bl[i],o.nw,sgn(o.m,'/h'),o.tp==null?'--':fx(o.tp,0)+'%',o.np==null?'--':fx(o.np,0)+'%',o.nd==null?'--':fx(o.nd,0)+'%',o.nw<5||o.nd==null?'Too few clean windows':o.nd>=112?'Basal may be low':o.nd<=88?'Basal may be high':'About right']);
+  const frow=fr.map((o,i)=>[bl[i],o.nw,sgn(o.m,'/h'),o.np==null?'--':fx(o.np,0)+'%',o.nd==null?'--':fx(o.nd,0)+'%',o.nw<5||o.nd==null?'Too few clean windows':o.nd>=112?'Basal may be low':o.nd<=88?'Basal may be high':'About right']);
   const rrow=rc.map((o,i)=>[bl[i],o.days?fx(o.low/o.days*100,0)+'%':'--',o.days?fx(o.high/o.days*100,0)+'%':'--',o.cl?fx(o.trim/o.cl*100,0)+'%':'--',o.cl?fx(o.add/o.cl*100,0)+'%':'--']);
   const mrow=['Breakfast','Lunch','Dinner','Late night'].filter(k=>ml[k]&&ml[k].length).map(k=>{const x=ml[k],f=h=>avg(x.map(h));return[k,x.length,fx(f(y=>y.c),0),fx(f(y=>y.bol),1),fx(f(y=>y.c)/f(y=>y.bol),1),vc(f(y=>y.b0)),vc(f(y=>y.pk)),sgn(f(y=>y.rise)),fx(f(y=>y.tp),0)+' min',vc(avg(x.filter(y=>y.b4!=null).map(y=>y.b4))),fx(x.filter(y=>y.b4>=70&&y.b4<=180).length/x.length*100,0)+'%']});
   const tod=[['Overnight 12a–6a',0,6],['Morning 6a–12p',6,12],['Afternoon 12p–6p',12,18],['Evening 6p–12a',18,24]].map(([l,a0,b0])=>{const q=ana(g.filter(e=>{const h=new Date(e.t).getHours();return h>=a0&&h<b0}));return q?[l,conv(q.m),fx(q.tir,0)+'%',fx(q.p[0]+q.p[1],1)+'%',fx(q.p[3]+q.p[4],0)+'%',fx(q.cv,0)+'%']:[l,'--','--','--','--','--']});
@@ -646,8 +658,8 @@ function renderInsights(){
    '<h2>Time in range by week (oldest to newest)</h2><canvas id="cWk" class="r"></canvas>'+
    '<h2>Typical day (median, 25–75% and 10–90%)</h2><canvas id="cAgp" class="r"></canvas>'+
    '<h2>By time of day</h2>'+tbl(['Block','Average','In range','Below 70','Above 180','CV'],tod)+'<h2>By day of week</h2>'+tbl(['Day','Average','In range','Below 70'],wd)+
-   '<h2>Basal check: loop delivery vs schedule</h2><div class="cards">'+cd(tPct==null?'--':fx(tPct,0)+'%','Temp basal only vs schedule')+cd(nPct==null?'--':fx(nPct,0)+'%','Temp + SMB vs schedule',nPct>=90&&nPct<=110?C.ok:C.hi)+cd(cc?fx(zr/cc*100,0)+'%':'--','Time at zero basal')+'</div><canvas id="cBas" class="r"></canvas><div class="note">Purple is average temp basal and cyan is SMB insulin on top, by hour. The dashed line is your scheduled basal.</div>'+
-   '<h2>Basal accuracy with SMBs counted</h2>'+tbl(['Block','Windows','Drift','Temp only','Temp + SMB','Estimated need','Reading'],frow)+'<div class="note">Trio’s SMBs borrow from future basal, then the loop runs zero temps to pay it back, so temp basal alone looks too low. Temp + SMB adds both. Estimated need also adds the insulin needed to cancel any glucose drift (drift ÷ ISF). Only 3-hour windows with no carbs or boluses in the previous 4 hours count. Around 100% means the scheduled basal fits.</div><h2>Patterns that repeat</h2>'+tbl(['Block','Days with a low','Days averaging over 180','Days loop under 75% of schedule','Days loop over 125%'],rrow)+'<div class="note">Counts how often the same 3-hour block repeats a problem. A repeat across many days points to a setting, not a one-off.</div>'+
+   '<h2>Basal check: loop delivery vs schedule</h2><div class="cards">'+cd(nPct==null?'--':fx(nPct,0)+'%','Loop insulin vs schedule (temp + SMB)',nPct>=90&&nPct<=110?C.ok:C.hi)+cd(cc?fx(zr/cc*100,0)+'%':'--','Time at zero basal')+'</div><canvas id="cBas" class="r"></canvas><div class="note">Purple is average temp basal and cyan is SMB insulin on top, by hour. The dashed line is your scheduled basal.</div>'+
+   '<h2>Is basal about right?</h2><div class="note" style="margin:0 0 8px">Only 3-hour windows with no manual bolus or carb entry in the previous 6 hours are used, so meals do not skew it. Temp basal and SMBs are added together, since Trio often delivers basal as SMBs and then runs low or zero temps. That is normal.</div>'+tbl(['Block','Clean windows','Glucose drift','Loop gave (temp + SMB)','Estimated need','Reading'],frow)+'<div class="note">Estimated need is what the loop gave plus the insulin needed to cancel any drift. Near 100% means scheduled basal fits.</div><h2>Patterns that repeat</h2>'+tbl(['Block','Days with a low','Days averaging over 180','Days loop under 75% of schedule','Days loop over 125%'],rrow)+
    '<h2>Meals (10 g or more)</h2>'+(mrow.length?tbl(['Meal','Count','Carbs g','Bolus U','g per U','Start','Peak','Rise','Peak at','4 h later','In range at 4 h'],mrow):'<div class="card"><span>No meals with carb entries found in this period.</span></div>')+(crp?'<div class="note">Your profile carb ratio is 1 U per '+fx(crp,0)+' g.</div>':'')+
    '<h2>Corrections</h2><div class="cards">'+cd(cr.length,'Correction boluses found')+cd(cm==null?'--':sgn(cm).replace('+','−')+' /U','Observed drop per unit over 3 h')+cd(isf==null?'--':conv(isf)+' /U','Profile ISF')+'</div><div class="note">Only boluses of 0.5 U or more, with no carbs nearby and glucose at or above 150. The loop also adjusts basal, so treat this as a rough guide.</div>'+
    '<h2>Lows</h2><div class="cards">'+cd(lw.n,'Low events (15+ min)')+cd(fx(lw.w,1),'Per week',lw.w<=3?C.ok:C.lo)+cd(fx(lw.dur,0)+' min','Average length')+cd(lw.mn==null?'--':conv(lw.mn),'Average lowest point')+cd(lw.u54,'Events below 54')+cd(fx(lw.noct,0)+'%','Starting overnight')+'</div><canvas id="cLow" class="r"></canvas><div class="note">Low events by the hour they started.</div>'+
@@ -718,9 +730,9 @@ const TP=[['Delivery limits',[['maxBasal','Max basal','U/h'],['maxBolus','Max bo
 function parseTS(a){const mm=PFx&&/mmol/i.test(PFx.units||'')?18.0182:1,out=[],seen=new Set();
   (a||[]).forEach(s=>{const o=s.openaps;if(!o)return;const x=o.enacted||o.suggested;if(!x)return;const t=new Date(x.timestamp||s.created_at).getTime();if(!t||seen.has(t))return;seen.add(t);
     const rs=x.reason||'',g=(re,k)=>{const m=rs.match(re);return m?parseFloat(m[1])*(k||1):null},im=rs.match(/ISF: ([\d.]+)\s*(?:→|->|>)\s*([\d.]+)/);
-    out.push({t,r:x.sensitivityRatio!=null?+x.sensitivityRatio:g(/Autosens ratio: ([\d.]+)/),i0:im?im[1]*mm:null,i1:im?im[2]*mm:null,cr:g(/CR: ([\d.]+)/),tg:g(/Target: ([\d.]+)/,mm),iob:o.iob&&o.iob.iob!=null?o.iob.iob:x.IOB,smb:+x.units||0,rate:x.rate!=null?+x.rate:null})});
+    out.push({t,r:x.sensitivityRatio!=null?+x.sensitivityRatio:g(/Autosens ratio: ([\d.]+)/),i0:im?im[1]*mm:null,i1:im?im[2]*mm:null,cr:g(/CR: ([\d.]+)/),tg:g(/Target: ([\d.]+)/,mm),iob:o.iob&&o.iob.iob!=null?o.iob.iob:x.IOB,smb:+x.units||0,rate:x.rate!=null?+x.rate:null,cob:x.COB!=null?+x.COB:null,bi:o.iob&&o.iob.basaliob!=null?+o.iob.basaliob:null,bo:o.iob&&o.iob.bolusiob!=null?+o.iob.bolusiob:null})});
   return out.sort((a,b)=>a.t-b.t)}
-function demoTS(){const n=Date.now();TS=[];for(let t=n-864e5;t<=n;t+=3e5){const r=Math.max(.7,Math.min(1.2,1.05+.15*Math.sin(t/2.2e6)));TS.push({t,r,i0:45,i1:45/r,cr:10,tg:100,iob:1.5+Math.sin(t/1e6),smb:rnd(t/3e5)>.85?.3:0,rate:.7})}}
+function demoTS(){const n=Date.now();TS=[];for(let t=n-864e5;t<=n;t+=3e5){const r=Math.max(.7,Math.min(1.2,1.05+.15*Math.sin(t/2.2e6)));TS.push({t,r,i0:45,i1:45/r,cr:10,tg:100,iob:Math.max(0,2+2*Math.sin(t/1.5e6))-1+Math.sin(t/3e6),bo:Math.max(0,2+2*Math.sin(t/1.5e6)),bi:-1+Math.sin(t/3e6),cob:Math.max(0,32*Math.sin(t/4e6)),smb:rnd(t/3e5)>.85?.3:0,rate:.7})}}
 async function loadTherapy(){const st=$('thStatus');
   try{if(demo()){demoTS();st.textContent='Showing demo data. Connect Nightscout in Settings for your own settings.'}
     else{const cu=cleanUrl(S.url),tok=S.token||cu.token,tk=tok?'&token='+encodeURIComponent(tok):'',jf=async u=>{const r=await fetch(cu.url+u+tk);if(!r.ok)throw new Error('HTTP '+r.status);return r.json()};
@@ -822,6 +834,38 @@ function wireImports(){const pick=(id,fn)=>{$(id).onchange=async e=>{const f=[..
   pick('fLog',async f=>{$('thStatus').textContent='Reading logs...';const r=parseLogs(await Promise.all(f.map(x=>x.text())));mergeLogs(r);$('thStatus').textContent='Read '+r.loops.length.toLocaleString()+' loop runs and '+r.tdds.length+' TDD summaries.';renderTherapy()})}
 if(TCSV)applyCSV(null,false);
 idbGet('triolog').then(c=>{if(c&&c.l){LOGL=c.l;TDDS=c.t||[];if(!$('therapy').hidden)renderTherapy()}});
+/* ===== IOB / COB / target view ===== */
+let bview=false,balAt=0;
+function mergeTS(a){if(!a||!a.length)return;const m=new Map(TS.map(x=>[x.t,x]));a.forEach(x=>m.set(x.t,x));TS=[...m.values()].sort((p,q)=>p.t-q.t).filter(x=>x.t>Date.now()-27*36e5)}
+const balSeries=()=>{const m=new Map();LOGL.forEach(x=>{const t=x.rs&&x.rs.match(/Target: ([\d.]+)/);m.set(x.t,{t:x.t,iob:x.iob,cob:x.cob,tg:t?+t[1]:null,bi:null,bo:null})});TS.forEach(x=>m.set(x.t,x));return[...m.values()].sort((a,b)=>a.t-b.t)};
+async function balOpen(){if(demo()){demoTS();drawChart();return}
+  if(Date.now()-balAt>5*6e4){balAt=Date.now();try{const cu=cleanUrl(S.url),tok=S.token||cu.token,r=await fetch(cu.url+'/api/v1/devicestatus.json?count=1800'+(tok?'&token='+encodeURIComponent(tok):''));if(r.ok)mergeTS(parseTS(await r.json()))}catch(e){}}drawChart()}
+function setView(v){bview=v;$('vG').className=v?'':'on';$('vB').className=v?'on':'';$('legend').innerHTML='';$('selinfo').textContent='Touch the chart to read a value';sel=null;if(v)balOpen();else drawChart()}
+$('vG').onclick=()=>setView(false);$('vB').onclick=()=>setView(true);
+function drawBal(){
+  const[g,W,H]=fit($('chart')),now=Date.now(),t0=now-range*36e5,t1=now+.1*36e5,L=42,R=10,T=6,B=22,gp=10,h=H-T-B-2*gp,hg=h*.5,hi=h*.3,hc=h*.2,iy=T+hg+gp,cy=iy+hi+gp,X=t=>L+(t-t0)/(t1-t0)*(W-L-R);
+  const bs=balSeries().filter(x=>x.t>=t0-9e5),vis=D.filter(e=>e.t>=t0),ymax=Math.max(220,...vis.map(e=>e.v+10)),ymin=40,Y=v=>T+(1-(Math.max(ymin,Math.min(v,ymax))-ymin)/(ymax-ymin))*hg;
+  g.clearRect(0,0,W,H);g.fillStyle='rgba(255,255,255,.03)';[[T,hg],[iy,hi],[cy,hc]].forEach(([y,q])=>g.fillRect(L,y,W-L-R,q));
+  g.fillStyle='rgba(52,224,161,.09)';g.fillRect(L,Y(S.high),W-L-R,Y(S.low)-Y(S.high));
+  g.font='12px sans-serif';g.textAlign='right';g.textBaseline='middle';g.fillStyle='#7f8aa8';[S.low,S.high].forEach(v=>g.fillText(conv(v),L-6,Y(v)));
+  g.textAlign='center';g.textBaseline='top';const st=range<=6?36e5:range<=12?72e5:108e5,d0=new Date(t0);d0.setMinutes(0,0,0);
+  for(let t=d0.getTime()+36e5;t<=now;t+=st){g.fillStyle='#7f8aa8';g.fillText(hr(t),X(t),H-B+6);g.strokeStyle='rgba(200,214,255,.06)';g.beginPath();g.moveTo(X(t),T);g.lineTo(X(t),cy+hc);g.stroke()}
+  let j=0,cur=null;const tl=[];for(let t=t0;t<=now;t+=3e5){while(j<bs.length&&bs[j].t<=t){if(bs[j].tg!=null)cur=bs[j].tg;j++}let v=cur;if(v==null){const P=CPF&&CPF.tlo.length?CPF:PF;if(P&&P.tlo.length){const d=new Date(t);v=atS(P.tlo,d.getHours()*3600+d.getMinutes()*60)}}if(v!=null)tl.push([t,v])}
+  g.strokeStyle='#a78bfa';g.lineWidth=2;g.setLineDash([6,4]);g.beginPath();tl.forEach(([t,v],i)=>{i?g.lineTo(X(t),Y(v)):g.moveTo(X(t),Y(v))});g.stroke();g.setLineDash([]);g.lineWidth=1;
+  vis.forEach(e=>{g.fillStyle=col(e.v);g.beginPath();g.arc(X(e.t),Y(e.v),range<=6?3.2:2.2,0,7);g.fill()});
+  TX.filter(e=>e.t>=t0&&e.t<=now&&!e.smb).forEach(e=>{const x=X(e.t),yb=T+hg;if(e.carb>0){g.fillStyle='#ffb066';g.beginPath();g.arc(x,yb-11,9,0,7);g.fill();g.fillStyle='#1c1005';g.font='bold 10px sans-serif';g.textAlign='center';g.textBaseline='middle';g.fillText(Math.round(e.carb),x,yb-11)}if(e.ins>0){g.fillStyle='#8fa8ff';g.beginPath();g.moveTo(x-5,yb-34);g.lineTo(x+5,yb-34);g.lineTo(x,yb-25);g.fill()}});
+  const io=bs.filter(x=>x.iob!=null&&x.t>=t0),lm=Math.max(1,...io.map(x=>Math.abs(x.iob)),...bs.map(x=>Math.abs(x.bi||0))),lim=lm*1.15,Yi=v=>iy+hi/2-v/lim*(hi/2),bw=Math.max(1.5,(W-L-R)/(range*12));
+  g.strokeStyle='rgba(200,214,255,.3)';g.beginPath();g.moveTo(L,Yi(0));g.lineTo(W-R,Yi(0));g.stroke();
+  io.forEach(x=>{g.fillStyle=x.iob>=0?'rgba(129,140,248,.65)':'rgba(244,114,182,.7)';const y=Yi(x.iob);g.fillRect(X(x.t)-bw/2,Math.min(y,Yi(0)),bw,Math.abs(y-Yi(0)))});
+  const bi=bs.filter(x=>x.bi!=null&&x.t>=t0);if(bi.length){g.strokeStyle='#22d3ee';g.lineWidth=1.5;g.beginPath();bi.forEach((x,i)=>{i?g.lineTo(X(x.t),Yi(x.bi)):g.moveTo(X(x.t),Yi(x.bi))});g.stroke();g.lineWidth=1}
+  g.font='11px sans-serif';g.fillStyle='#7f8aa8';g.textAlign='right';g.textBaseline='middle';g.fillText('+'+fx(lm,1),L-6,Yi(lm));g.fillText('0',L-6,Yi(0));g.fillText('−'+fx(lm,1),L-6,Yi(-lm));
+  const cb=bs.filter(x=>x.cob!=null&&x.t>=t0),cm=Math.max(20,...cb.map(x=>x.cob))*1.1,Yc=v=>cy+hc-v/cm*hc;
+  cb.forEach(x=>{g.fillStyle='rgba(255,176,102,.75)';g.fillRect(X(x.t)-bw/2,Yc(x.cob),bw,cy+hc-Yc(x.cob))});g.fillStyle='#7f8aa8';g.fillText(fx(cm/1.1,0)+'g',L-6,cy+7);g.fillText('0',L-6,cy+hc);
+  g.textAlign='left';g.textBaseline='top';g.fillText('Glucose and target (dashed)',L+4,T+2);g.fillText('IOB bars, basal IOB line',L+4,iy+2);g.fillText('COB',L+4,cy+2);
+  const l=bs.length?bs[bs.length-1]:null;
+  $('legend').innerHTML=l&&l.iob!=null?`<span style="color:${l.iob>=0?'#a5b4fc':'#f472b6'}">IOB ${l.iob>=0?'+':'−'}${fx(Math.abs(l.iob),2)} U ${l.iob>=0?'net positive':'net negative'}</span>`+(l.bi!=null?`<span style="color:#22d3ee">basal ${l.bi>=0?'+':'−'}${fx(Math.abs(l.bi),2)}</span><span>bolus ${fx(l.bo,2)}</span>`:'')+(l.cob!=null?`<span style="color:#ffb066">${l.cob>0?'COB '+Math.round(l.cob)+' g':'No carbs on board'}</span>`:''):'<span>No IOB history from Nightscout yet</span>';
+  if(sel){const x=X(sel.t);g.strokeStyle='rgba(200,214,255,.5)';g.beginPath();g.moveTo(x,T);g.lineTo(x,cy+hc);g.stroke();const nr=bs.reduce((a,b)=>!a||Math.abs(b.t-sel.t)<Math.abs(a.t-sel.t)?b:a,null);
+    if(nr&&Math.abs(nr.t-sel.t)<10*6e4)$('selinfo').textContent+=(nr.iob!=null?'  ·  IOB '+(nr.iob>=0?'+':'−')+fx(Math.abs(nr.iob),2)+' U':'')+(nr.cob!=null?'  ·  COB '+Math.round(nr.cob)+' g':'')}}
 $('test').onclick=testConn;
 load(true);setInterval(()=>load(false),6e4);
 try{if(demo()&&!localStorage.getItem('gs_seen')){localStorage.setItem('gs_seen','1');$('cfg').click()}}catch(e){}
