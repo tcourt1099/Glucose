@@ -150,13 +150,21 @@ button.on{color:#041021}
 dialog{background:#0d1328}
 #pods{overflow-x:auto}
 #podp{height:220px}
+#insight{flex:1;min-height:0;overflow-y:auto;padding:0 20px 28px}
+#insight[hidden]{display:none}
+.tw{overflow-x:auto;border-radius:14px}
+.obs{list-style:none;padding:0;display:grid;gap:8px}
+.obs li{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--ok);border-radius:12px;padding:10px 12px;font-size:15px;line-height:1.35}
+.obs li.warn{border-left-color:var(--hi)}.obs li.bad{border-left-color:var(--lo)}
+.note{color:var(--mute);font-size:13px;line-height:1.4;margin-top:8px}
+#cWk,#cBas,#cLow{height:200px}#cAgp{height:260px}
 </style>
 </head>
 <body>
 <div id="app">
 <header>
   <div id="clock"></div><div id="date"></div>
-  <span class="seg"><button id="tNow" class="on">Now</button><button id="tRep">Reports</button></span>
+  <span class="seg"><button id="tNow" class="on">Now</button><button id="tRep">Reports</button><button id="tIns">Insights</button></span>
   <div id="status"></div>
   <button id="nsBtn">Night</button><button id="fs" aria-label="Fullscreen">⛶</button><button id="cfg">Settings</button>
 </header>
@@ -182,6 +190,11 @@ dialog{background:#0d1328}
   <h2>Pod changes: glucose before and after each pod</h2><div id="pods"></div>
   <h2>Average glucose by hours since pod change</h2><canvas id="podp" class="r"></canvas>
   <button id="logPod" style="margin-top:12px">Log a pod change now</button>
+</section>
+<section id="insight" hidden>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px"><span id="insPd" class="seg"></span><button id="insBtn">Refresh data</button></div>
+  <div id="insStatus" style="color:var(--mute);font-size:14px;margin:6px 0"></div>
+  <div id="insBody"></div>
 </section>
 </div>
 <div id="ns" hidden>
@@ -429,13 +442,13 @@ function renderReports(){
   insTable();renderPods()
 }
 
-function render(){tick();drawChart();if(!$('rep').hidden)renderReports();if(!$('ns').hidden)nsUpdate()}
+function render(){tick();drawChart();if(!$('rep').hidden)renderReports();if(!$('ns').hidden)nsUpdate();if(!$('insight').hidden)drawQ.forEach(f=>f())}
 
 // controls
 $('rb').innerHTML='';[3,6,12,24].forEach(h=>{const b=document.createElement('button');b.textContent=h+' h';b.className=h===range?'on':'';b.onclick=()=>{range=h;[...$('rb').children].forEach(x=>x.className=x===b?'on':'');drawChart()};$('rb').append(b)});
 [[1,'Today'],[7,'7 days'],[14,'14 days']].forEach(([d,l])=>{const b=document.createElement('button');b.textContent=l;b.className=d===period?'on':'';b.onclick=()=>{period=d;[...$('pb').children].forEach(x=>x.className=x===b?'on':'');renderReports()};$('pb').append(b)});
-function show(rep){$('now').hidden=rep;$('rep').hidden=!rep;$('tNow').className=rep?'':'on';$('tRep').className=rep?'on':'';requestAnimationFrame(render)}
-$('tNow').onclick=()=>show(false);$('tRep').onclick=()=>show(true);
+function show(v){$('now').hidden=v!==0;$('rep').hidden=v!==1;$('insight').hidden=v!==2;['tNow','tRep','tIns'].forEach((id,i)=>$(id).className=i===v?'on':'');if(v===2)insOpen();requestAnimationFrame(render)}
+$('tNow').onclick=()=>show(0);$('tRep').onclick=()=>show(1);$('tIns').onclick=()=>show(2);
 $('fs').onclick=()=>{document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen?.()};
 $('snooze').onclick=()=>{snoozeUntil=Date.now()+30*6e4;tick()};
 $('cfg').onclick=()=>{const f={fUrl:'url',fTok:'token',fUnit:'unit',fVlo:'vlow',fLo:'low',fHi:'high',fVhi:'vhigh',fOn:'dimOn',fOff:'dimOff',fDl:'dimLevel'};
@@ -525,6 +538,151 @@ function renderPods(){
   for(let h=84;h>=0;h--){if(P[h])g.lineTo(X(h),Y(P[h][0]))}g.closePath();g.fill();
   g.strokeStyle='#e8eeff';g.lineWidth=2.5;g.beginPath();st=false;P.forEach((q,h)=>{if(q){st?g.lineTo(X(h),Y(q[1])):(g.moveTo(X(h),Y(q[1])),st=true)}});g.stroke();g.lineWidth=1}
 $('logPod').onclick=()=>{try{const a=JSON.parse(localStorage.getItem('gs_pods')||'[]');a.push(Date.now());localStorage.setItem('gs_pods',JSON.stringify(a))}catch(e){}podRebuild();renderReports();drawChart();loopStrip()};
+/* ===== Insights: long-range analysis ===== */
+const DAY=864e5,med=a=>{if(!a.length)return null;const q=[...a].sort((x,y)=>x-y),m=q.length>>1;return q.length%2?q[m]:(q[m-1]+q[m])/2};
+const avg=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:null,fx=(v,d=0)=>v==null||isNaN(v)?'--':(+v).toFixed(d);
+let LG=[],LXT=[],LTB=[],LPC=[],ipd=90,RS=0,GA=null,RA=null,SA=null,MK=null,HR=null,drawQ=[],loadingLong=false,longAt=0;
+const sl=t=>Math.round((t-RS)/3e5),vc=v=>v==null?'--':`<span style="color:${col(v)}">${conv(v)}</span>`;
+const sgn=(m,per)=>m==null?'--':(m>=0?'+':'−')+(S.unit==='mmol'?Math.abs(m/18.0182).toFixed(1):Math.abs(Math.round(m)))+(per||'');
+const zone=g=>g<20?'A':g<40?'B':g<60?'C':g<80?'D':'E',zc=g=>g<20?C.ok:g<40?'#9be15d':g<60?C.hi:g<80?C.vhi:C.lo;
+function ana(g){const n=g.length;if(!n)return null;let sum=0,sq=0,lb=0,hb=0;const b=[0,0,0,0,0];
+  g.forEach(e=>{sum+=e.v;b[e.v<54?0:e.v<70?1:e.v<=180?2:e.v<=250?3:4]++;const f=1.509*(Math.pow(Math.log(Math.max(e.v,20)),1.084)-5.381),r=10*f*f;f<0?lb+=r:hb+=r});
+  const m=sum/n;g.forEach(e=>sq+=(e.v-m)**2);const sd=Math.sqrt(sq/n),p=b.map(x=>x/n*100);
+  return{n,m,sd,cv:sd/m*100,gmi:3.31+.02392*m,p,lbgi:lb/n,hbgi:hb/n,gri:Math.min(100,3*p[0]+2.4*p[1]+1.6*p[4]+.8*p[3]),tir:p[2]}}
+function buildSlices(){const n=Date.now();RS=Math.floor((n-185*DAY)/3e5)*3e5;const N=Math.ceil((n-RS)/3e5)+2;
+  GA=new Float32Array(N).fill(NaN);RA=new Float32Array(N).fill(NaN);SA=new Float32Array(N);MK=new Uint8Array(N);HR=new Uint8Array(N);
+  LG.forEach(e=>{const i=sl(e.t);if(i>=0&&i<N)GA[i]=e.v});
+  for(let k=0;k<LTB.length;k++){const e=LTB[k],nx=LTB[k+1];if(!(e.dur>0))continue;const end=Math.min(e.t+e.dur*6e4,nx?nx.t:1e18,n);for(let i=Math.max(0,Math.ceil((e.t-RS)/3e5));i<N&&RS+i*3e5<end;i++)RA[i]=e.rate}
+  for(let i=0;i<N;i++){SA[i]=schedAt(RS+i*3e5);HR[i]=new Date(RS+i*3e5).getHours()}
+  LXT.forEach(e=>{if(e.carb>0||(e.ins>0&&!e.smb)){const i=sl(e.t);for(let j=Math.max(0,i);j<Math.min(N,i+48);j++)MK[j]=1}})}
+function insStat(d){const n=Date.now(),t0=Math.max(n-d*DAY,LG.length?LG[0].t:0),days=Math.max(1,(n-t0)/DAY);let bas=0;
+  for(let i=Math.max(0,sl(t0));i<GA.length;i++)bas+=(isNaN(RA[i])?SA[i]:RA[i])/12;
+  let bol=0,smb=0,car=0,ns=0,nb=0;LXT.forEach(e=>{if(e.t>=t0){if(e.smb){smb+=e.ins;ns++}else if(e.ins>0){bol+=e.ins;nb++}car+=e.carb}});
+  return{bas:bas/days,bol:bol/days,smb:smb/days,tdd:(bas+bol+smb)/days,car:car/days,ns:ns/days,nb:nb/days,smbAvg:ns?smb/ns:null}}
+function fasting(d){const n=Date.now(),mid=new Date();mid.setHours(0,0,0,0);const out=Array.from({length:8},()=>({dr:[],dv:0,sc:0,c:0}));
+  for(let k=0;k<d;k++){const day=new Date(mid);day.setDate(day.getDate()-k);for(let b=0;b<8;b++){const s=new Date(day);s.setHours(b*3,0,0,0);const i0=sl(s.getTime());
+    if(i0<0||i0+36>=GA.length||s.getTime()+108e5>n)continue;let bad=0,got=0;for(let i=i0;i<i0+36;i++){if(MK[i]){bad=1;break}if(!isNaN(GA[i]))got++}if(bad||got<30)continue;
+    const a=[],z=[];for(let i=0;i<3;i++){if(!isNaN(GA[i0+i]))a.push(GA[i0+i]);if(!isNaN(GA[i0+33+i]))z.push(GA[i0+33+i])}if(!a.length||!z.length)continue;
+    out[b].dr.push((avg(z)-avg(a))/3);for(let i=i0;i<i0+36;i++){if(!isNaN(RA[i])){out[b].dv+=RA[i];out[b].sc+=SA[i];out[b].c++}}}}return out}
+function meals(d){const t0=Date.now()-d*DAY,ev=LXT.filter(e=>e.carb>=10&&e.t>=t0&&!e.smb),g={};let last=0;
+  ev.forEach(e=>{if(e.t-last<45*6e4)return;last=e.t;const i=sl(e.t);if(i<2||i+50>=GA.length)return;
+    const nn=x=>x.filter(v=>!isNaN(v)),b0=avg(nn([GA[i-1],GA[i],GA[i+1]]));if(b0==null)return;
+    let pk=b0,pi=0,c=0;for(let j=0;j<=48;j++){const v=GA[i+j];if(!isNaN(v)){c++;if(v>pk){pk=v;pi=j}}}if(c<36)return;
+    const b4=avg(nn([GA[i+47],GA[i+48],GA[i+49]])),bol=LXT.filter(x=>!x.smb&&x.ins>0&&Math.abs(x.t-e.t)<=20*6e4).reduce((q,x)=>q+x.ins,0),h=new Date(e.t).getHours(),k=h>=5&&h<11?'Breakfast':h>=11&&h<16?'Lunch':h>=16&&h<22?'Dinner':'Late night';
+    (g[k]=g[k]||[]).push({c:e.carb,bol,b0,pk,rise:pk-b0,tp:pi*5,b4})});return g}
+function corr(d){const t0=Date.now()-d*DAY,out=[];
+  LXT.forEach(e=>{if(e.smb||e.ins<.5||e.t<t0||LXT.some(x=>x.carb>0&&Math.abs(x.t-e.t)<=60*6e4))return;const i=sl(e.t);if(i<1||i+37>=GA.length)return;
+    const b0=!isNaN(GA[i])?GA[i]:GA[i-1],z=[GA[i+35],GA[i+36],GA[i+37]].filter(v=>!isNaN(v));if(isNaN(b0)||b0<150||!z.length)return;out.push((b0-avg(z))/e.ins)});return out}
+function lows(d){const i0=Math.max(0,sl(Date.now()-d*DAY)),N=GA.length,runs=[];let i=i0;
+  while(i<N){if(GA[i]<70){let j=i,mn=GA[i];while(j<N&&GA[j]<70){mn=Math.min(mn,GA[j]);j++}if(j-i>=3){const pv=runs[runs.length-1];if(pv&&i-pv.e<6){pv.e=j;pv.mn=Math.min(pv.mn,mn)}else runs.push({s:i,e:j,mn})}i=j}else i++}
+  const hist=Array(24).fill(0);runs.forEach(r=>hist[HR[r.s]]++);const wk=d/7;
+  return{n:runs.length,w:runs.length/wk,dur:avg(runs.map(r=>(r.e-r.s)*5)),mn:avg(runs.map(r=>r.mn)),u54:runs.filter(r=>r.mn<54).length,noct:runs.length?hist.slice(0,6).reduce((a,b)=>a+b,0)/runs.length*100:0,hist}}
+function podSum(d){const t0=Date.now()-d*DAY,r={life:[],bf:[],f6:[],d1:[],d2:[],d3:[]},m=(a,b)=>{const x=[];for(let j=sl(a);j<sl(b);j++)if(j>=0&&!isNaN(GA[j]))x.push(GA[j]);return x.length>12?avg(x):null},H=36e5;
+  let n=0;LPC.forEach((t,i)=>{if(t<t0)return;n++;const nx=LPC[i+1],e=nx||Date.now();if(nx)r.life.push((nx-t)/H);
+    [['bf',t-6*H,t],['f6',t,Math.min(t+6*H,e)],['d1',t,Math.min(t+24*H,e)],['d2',t+24*H,Math.min(t+48*H,e)],['d3',t+48*H,e]].forEach(([k,a,b])=>{const v=b>a?m(a,b):null;if(v!=null)r[k].push(v)})});
+  return{n,life:avg(r.life),bf:avg(r.bf),f6:avg(r.f6),d1:avg(r.d1),d2:avg(r.d2),d3:avg(r.d3)}}
+const tbl=(h,rows)=>'<div class="tw"><table class="t"><tr>'+h.map(x=>'<th>'+x+'</th>').join('')+'</tr>'+rows.map(r=>'<tr>'+r.map(c=>'<td>'+c+'</td>').join('')+'</tr>').join('')+'</table></div>';
+const cd=(v,l,c)=>`<div class="card"><b${c?` style="color:${c}"`:''}>${v}</b><span>${l}</span></div>`;
+function cvs(id){const c=$(id);if(!c||!c.offsetWidth)return null;return fit(c)}
+function renderInsights(){
+  const el=$('insBody'),d=ipd,n=Date.now(),g=LG.filter(e=>e.t>=n-d*DAY),a=ana(g);
+  if(!a||!GA){el.innerHTML='<div class="card"><span>No data loaded yet.</span></div>';return}
+  const ic=insStat(d),u=S.unit==='mmol'?'mmol/L':'mg/dL',span=Math.min(d,(n-LG[0].t)/DAY),cov=Math.min(100,a.n/(span*288)*100),k5=[C.vlo,C.lo,C.ok,C.hi,C.vhi];
+  const hypo=a.p[0]+.8*a.p[1],hyper=a.p[4]+.5*a.p[3],low=a.p[0]+a.p[1],lc=a.lbgi<1.1?'minimal':a.lbgi<2.5?'low':a.lbgi<5?'moderate':'high',hc=a.hbgi<4.5?'low':a.hbgi<9?'moderate':'high';
+  const fs=fasting(d),bl=['12a–3a','3a–6a','6a–9a','9a–12p','12p–3p','3p–6p','6p–9p','9p–12a'],ml=meals(d),cr=corr(d),lw=lows(d),pd=podSum(d),ob=[];
+  // observations
+  ob.push([a.gri<40?'':a.gri<60?'warn':'bad','GRI is '+fx(a.gri,0)+' (zone '+zone(a.gri)+'). Zone A is the lowest glycemic risk.']);
+  if(low>4)ob.push(['bad','Time below 70 is '+fx(low,1)+'%. The usual goal is under 4%.']);else ob.push(['','Time below 70 is '+fx(low,1)+'%, within the usual goal of under 4%.']);
+  if(a.p[0]>1)ob.push(['bad','Time below 54 is '+fx(a.p[0],1)+'%. The usual goal is under 1%.']);
+  if(a.tir<70)ob.push(['warn','Time in range is '+fx(a.tir,0)+'%. The usual goal is 70% or more.']);
+  if(a.cv>36)ob.push(['warn','Variability (CV) is '+fx(a.cv,0)+'%. Under 36% is considered stable.']);
+  if(lw.n>=4&&lw.noct>45)ob.push(['warn',fx(lw.noct,0)+'% of your lows start between midnight and 6 am.']);
+  fs.forEach((o,i)=>{const m=med(o.dr),pc=o.sc>0?o.dv/o.sc*100:null;if(o.dr.length>=5&&m!=null&&pc!=null){if(m>5&&pc>=105)ob.push(['warn',bl[i]+': glucose drifts up ('+sgn(m,'/h')+') even with the loop adding insulin ('+fx(pc,0)+'% of scheduled). Basal may be low in this block.']);if(m<-5&&pc<=95)ob.push(['warn',bl[i]+': glucose drifts down ('+sgn(m,'/h')+') while the loop trims insulin ('+fx(pc,0)+'% of scheduled). Basal may be high in this block.'])}});
+  Object.keys(ml).forEach(k=>{const x=ml[k];if(x.length>=8&&avg(x.map(y=>y.rise))>80)ob.push(['warn',k+' meals rise '+sgn(avg(x.map(y=>y.rise)))+' on average. Pre-bolus timing or the ratio may be worth a look.'])});
+  if(pd.d1!=null&&pd.d3!=null&&Math.abs(pd.d1-pd.d3)>15)ob.push(['warn','Pod day 1 averages '+conv(pd.d1)+' versus '+conv(pd.d3)+' on day 3 or later.']);
+  // weekly bins
+  const wn=Math.ceil(d/7),wb=Array.from({length:wn},()=>[]);g.forEach(e=>{const w=Math.min(wn-1,Math.floor((n-e.t)/(7*DAY)));wb[w].push(e)});const wk=wb.map(ana).reverse().filter(Boolean);
+  // compare table
+  const P4=[14,30,90,180].map(x=>{const gg=LG.filter(e=>e.t>=n-x*DAY),q=ana(gg),sp=Math.min(x,(n-LG[0].t)/DAY);return{x,q,i:insStat(x),cov:q?Math.min(100,q.n/(sp*288)*100):0}});
+  const R=[['Average ('+u+')',z=>conv(z.q.m)],['GMI',z=>fx(z.q.gmi,1)+'%'],['Std deviation',z=>S.unit==='mmol'?fx(z.q.sd/18.0182,1):fx(z.q.sd,0)],['Variability (CV)',z=>fx(z.q.cv,0)+'%'],['In range 70–180',z=>fx(z.q.tir,0)+'%'],['Below 70',z=>fx(z.q.p[0]+z.q.p[1],1)+'%'],['Below 54',z=>fx(z.q.p[0],1)+'%'],['Above 180',z=>fx(z.q.p[3]+z.q.p[4],0)+'%'],['Above 250',z=>fx(z.q.p[4],1)+'%'],['GRI',z=>fx(z.q.gri,0)+' ('+zone(z.q.gri)+')'],['LBGI / HBGI',z=>fx(z.q.lbgi,1)+' / '+fx(z.q.hbgi,1)],['Sensor coverage',z=>fx(z.cov,0)+'%'],['Insulin per day (U)',z=>fx(z.i.tdd,1)],['Basal per day',z=>fx(z.i.bas,1)],['Bolus per day',z=>fx(z.i.bol,1)],['SMB per day',z=>fx(z.i.smb,1)],['Carbs per day (g)',z=>fx(z.i.car,0)]];
+  const cmp=tbl(['',...P4.map(z=>z.x+' days')],R.map(([l,f])=>[l,...P4.map(z=>z.q?f(z):'--')]));
+  // loop behaviour + hourly basal
+  const i0=Math.max(0,sl(n-d*DAY)),hs=new Float64Array(24),hq=new Float64Array(24),hd=new Float64Array(24);let up=0,dn=0,zr=0,cc=0,sd=0,sc2=0;
+  for(let i=i0;i<GA.length;i++){const h=HR[i];hs[h]+=SA[i];hq[h]++;if(!isNaN(RA[i])){hd[h]+=RA[i];cc++;sd+=RA[i];sc2+=SA[i];if(RA[i]>SA[i]*1.05)up++;else if(RA[i]<SA[i]*.95)dn++;if(RA[i]===0)zr++}}
+  const frow=fs.map((o,i)=>{const m=med(o.dr),pc=o.sc>0?o.dv/o.sc*100:null;let fl='Too few clean windows';if(o.dr.length>=5&&m!=null){fl=m>5&&pc>=105?'Rising while loop adds insulin':m<-5&&pc<=95?'Falling while loop trims insulin':Math.abs(m)<=5?'Looks steady':'Mixed'}return[bl[i],o.dr.length,sgn(m,'/h'),pc==null?'--':fx(pc,0)+'%',fl]});
+  const mrow=['Breakfast','Lunch','Dinner','Late night'].filter(k=>ml[k]&&ml[k].length).map(k=>{const x=ml[k],f=h=>avg(x.map(h));return[k,x.length,fx(f(y=>y.c),0),fx(f(y=>y.bol),1),fx(f(y=>y.c)/f(y=>y.bol),1),vc(f(y=>y.b0)),vc(f(y=>y.pk)),sgn(f(y=>y.rise)),fx(f(y=>y.tp),0)+' min',vc(avg(x.filter(y=>y.b4!=null).map(y=>y.b4))),fx(x.filter(y=>y.b4>=70&&y.b4<=180).length/x.length*100,0)+'%']});
+  const tod=[['Overnight 12a–6a',0,6],['Morning 6a–12p',6,12],['Afternoon 12p–6p',12,18],['Evening 6p–12a',18,24]].map(([l,a0,b0])=>{const q=ana(g.filter(e=>{const h=new Date(e.t).getHours();return h>=a0&&h<b0}));return q?[l,conv(q.m),fx(q.tir,0)+'%',fx(q.p[0]+q.p[1],1)+'%',fx(q.p[3]+q.p[4],0)+'%',fx(q.cv,0)+'%']:[l,'--','--','--','--','--']});
+  const wd=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((l,i)=>{const q=ana(g.filter(e=>new Date(e.t).getDay()===i));return q?[l,conv(q.m),fx(q.tir,0)+'%',fx(q.p[0]+q.p[1],1)+'%']:[l,'--','--','--']});
+  const cm=med(cr),isf=PF&&PF.sens.length?at(PF.sens,n):null,crp=PF&&PF.cr.length?at(PF.cr,n):null;
+  el.innerHTML=
+   '<h2>What stands out ('+d+' days)</h2><ul class="obs">'+ob.map(([c,t])=>`<li class="${c}">${t}</li>`).join('')+'</ul><div class="note">These are patterns in your data, not medical advice. Talk to your care team before changing settings.</div>'+
+   '<h2>Scorecard</h2><div class="cards">'+cd(fx(a.gri,0)+' · '+zone(a.gri),'Glycemia Risk Index',zc(a.gri))+cd(fx(a.tir,0)+'%','In range 70–180',a.tir>=70?C.ok:C.hi)+cd(conv(a.m),'Average '+u)+cd(fx(a.gmi,1)+'%','GMI (estimated A1C)')+cd(fx(a.cv,0)+'%','Variability (CV)',a.cv<=36?C.ok:C.hi)+cd(fx(low,1)+'%','Below 70',low<4?C.ok:C.lo)+cd(fx(cov,0)+'%','Sensor coverage')+cd(fx(ic.tdd,1)+' U','Insulin per day')+'</div>'+
+   '<h2>Compare 14, 30, 90 and 180 days</h2>'+cmp+
+   '<h2>Risk detail</h2><div class="cards">'+cd(fx(hypo,1),'Hypoglycemia component of GRI',hypo<5?C.ok:C.lo)+cd(fx(hyper,1),'Hyperglycemia component of GRI',hyper<30?C.ok:C.hi)+cd(fx(a.lbgi,1)+' · '+lc,'Low blood glucose index',a.lbgi<2.5?C.ok:C.lo)+cd(fx(a.hbgi,1)+' · '+hc,'High blood glucose index',a.hbgi<9?C.ok:C.hi)+'</div>'+
+   '<h2>Time in range by week (oldest to newest)</h2><canvas id="cWk" class="r"></canvas>'+
+   '<h2>Typical day (median, 25–75% and 10–90%)</h2><canvas id="cAgp" class="r"></canvas>'+
+   '<h2>By time of day</h2>'+tbl(['Block','Average','In range','Below 70','Above 180','CV'],tod)+'<h2>By day of week</h2>'+tbl(['Day','Average','In range','Below 70'],wd)+
+   '<h2>Basal check: loop delivery vs schedule</h2><div class="cards">'+cd(cc?fx(sd/sc2*100,0)+'%':'--','Average delivery vs scheduled basal')+cd(cc?fx(up/cc*100,0)+'%':'--','Time above schedule')+cd(cc?fx(dn/cc*100,0)+'%':'--','Time below schedule')+cd(cc?fx(zr/cc*100,0)+'%':'--','Time at zero basal')+'</div><canvas id="cBas" class="r"></canvas><div class="note">Bars are the loop’s average temp basal by hour. The dashed line is your scheduled basal.</div>'+
+   '<h2>Fasting windows (no carbs or boluses in the previous 4 hours)</h2>'+tbl(['Block','Windows','Glucose drift','Loop vs schedule','Reading'],frow)+'<div class="note">Drift is the median change per hour across clean 3-hour windows. A flat line with the loop near 100% of schedule suggests basal is about right.</div>'+
+   '<h2>Meals (10 g or more)</h2>'+(mrow.length?tbl(['Meal','Count','Carbs g','Bolus U','g per U','Start','Peak','Rise','Peak at','4 h later','In range at 4 h'],mrow):'<div class="card"><span>No meals with carb entries found in this period.</span></div>')+(crp?'<div class="note">Your profile carb ratio is 1 U per '+fx(crp,0)+' g.</div>':'')+
+   '<h2>Corrections</h2><div class="cards">'+cd(cr.length,'Correction boluses found')+cd(cm==null?'--':sgn(cm).replace('+','−')+' /U','Observed drop per unit over 3 h')+cd(isf==null?'--':conv(isf)+' /U','Profile ISF')+'</div><div class="note">Only boluses of 0.5 U or more, with no carbs nearby and glucose at or above 150. The loop also adjusts basal, so treat this as a rough guide.</div>'+
+   '<h2>Lows</h2><div class="cards">'+cd(lw.n,'Low events (15+ min)')+cd(fx(lw.w,1),'Per week',lw.w<=3?C.ok:C.lo)+cd(fx(lw.dur,0)+' min','Average length')+cd(lw.mn==null?'--':conv(lw.mn),'Average lowest point')+cd(lw.u54,'Events below 54')+cd(fx(lw.noct,0)+'%','Starting overnight')+'</div><canvas id="cLow" class="r"></canvas><div class="note">Low events by the hour they started.</div>'+
+   '<h2>Insulin and loop activity</h2><div class="cards">'+cd(fx(ic.tdd,1)+' U','Total per day')+cd(fx(ic.bas,1)+' U','Basal per day ('+fx(ic.bas/ic.tdd*100,0)+'%)')+cd(fx(ic.bol,1)+' U','Bolus per day ('+fx(ic.bol/ic.tdd*100,0)+'%)')+cd(fx(ic.smb,1)+' U','SMB per day ('+fx(ic.ns,1)+' SMBs, avg '+fx(ic.smbAvg,2)+' U)')+cd(fx(ic.car,0)+' g','Carbs per day')+cd(fx(ic.nb,1),'Boluses per day')+'</div><div class="note">Basal is estimated from temp basals plus your scheduled basal where no temp was running.</div>'+
+   '<h2>Pods</h2>'+(pd.n?tbl(['Pods','Avg life','6 h before','First 6 h','Day 1','Day 2','Day 3+'],[[pd.n,pd.life?fx(pd.life/24,1)+' d':'--',vc(pd.bf),vc(pd.f6),vc(pd.d1),vc(pd.d2),vc(pd.d3)]]):'<div class="card"><span>No pod changes found in this period.</span></div>');
+  // charts
+  drawQ=[()=>{const r=cvs('cWk');if(!r)return;const[c,W,H]=r,L=34,B=20,T=6,bw=(W-L-6)/Math.max(1,wk.length);c.clearRect(0,0,W,H);c.font='11px sans-serif';c.fillStyle='#7f8aa8';c.textAlign='right';c.textBaseline='middle';[0,50,100].forEach(v=>c.fillText(v+'%',L-4,H-B-v/100*(H-B-T)));
+      wk.forEach((w,i)=>{let y=H-B;w.p.forEach((p,j)=>{const h=p/100*(H-B-T);y-=h;c.fillStyle=k5[j];c.fillRect(L+i*bw+1,y,Math.max(1,bw-2),h)})});c.textAlign='center';c.textBaseline='top';c.fillStyle='#7f8aa8';c.fillText('oldest',L+20,H-B+4);c.fillText('latest',W-26,H-B+4)},
+   ()=>{const r=cvs('cAgp');if(!r)return;const[c,W,H]=r,L=42,B=22,T=6,bk=Array.from({length:96},()=>[]);g.forEach(e=>{const q=new Date(e.t);bk[Math.floor((q.getHours()*60+q.getMinutes())/15)].push(e.v)});
+      const P=bk.map(x=>{x.sort((p,q)=>p-q);return x.length>3?[.1,.25,.5,.75,.9].map(q=>pct(x,q)):null}),X=i=>L+i/95*(W-L-8),Y=v=>T+(1-(Math.min(v,300)-40)/260)*(H-T-B);
+      c.clearRect(0,0,W,H);c.fillStyle='rgba(52,224,161,.09)';c.fillRect(L,Y(S.high),W-L-8,Y(S.low)-Y(S.high));c.font='12px sans-serif';c.textAlign='right';c.textBaseline='middle';[S.low,S.high].forEach(v=>{c.fillStyle='#7f8aa8';c.fillText(conv(v),L-6,Y(v))});
+      c.textAlign='center';c.textBaseline='top';for(let h=0;h<=24;h+=3)c.fillText(h===0||h===24?'12a':h===12?'12p':(h%12)+(h<12?'a':'p'),L+h*4/95*(W-L-8),H-B+6);
+      const band=(lo,hi,al)=>{c.fillStyle='rgba(129,140,248,'+al+')';c.beginPath();let st=false;P.forEach((p,i)=>{if(p){st?c.lineTo(X(i),Y(p[hi])):(c.moveTo(X(i),Y(p[hi])),st=true)}});for(let i=95;i>=0;i--){if(P[i])c.lineTo(X(i),Y(P[i][lo]))}c.closePath();c.fill()};
+      band(0,4,.15);band(1,3,.3);c.strokeStyle='#e8eeff';c.lineWidth=2.5;c.beginPath();let st=false;P.forEach((p,i)=>{if(p){st?c.lineTo(X(i),Y(p[2])):(c.moveTo(X(i),Y(p[2])),st=true)}});c.stroke();c.lineWidth=1},
+   ()=>{const r=cvs('cBas');if(!r)return;const[c,W,H]=r,L=36,B=20,T=8,bw=(W-L-6)/24;let mx=.3;for(let h=0;h<24;h++){mx=Math.max(mx,hq[h]?hs[h]/hq[h]:0,hd[h]&&hq[h]?hd[h]/hq[h]:0)}mx*=1.2;const Y=v=>H-B-v/mx*(H-B-T);
+      c.clearRect(0,0,W,H);c.font='11px sans-serif';c.fillStyle='#7f8aa8';c.textAlign='right';c.textBaseline='middle';c.fillText(fx(mx/1.2,1),L-4,Y(mx/1.2));c.fillText('0',L-4,Y(0));
+      for(let h=0;h<24;h++){const v=hq[h]?hd[h]/hq[h]:0;c.fillStyle='rgba(129,140,248,.7)';c.fillRect(L+h*bw+1,Y(v),bw-2,H-B-Y(v))}
+      c.strokeStyle='#e8eeff';c.setLineDash([4,3]);c.beginPath();for(let h=0;h<24;h++){const y=Y(hq[h]?hs[h]/hq[h]:0);c.moveTo(L+h*bw,y);c.lineTo(L+(h+1)*bw,y)}c.stroke();c.setLineDash([]);
+      c.textAlign='center';c.textBaseline='top';for(let h=0;h<24;h+=3)c.fillText(h===0?'12a':h===12?'12p':(h%12)+(h<12?'a':'p'),L+h*bw+bw/2,H-B+4)},
+   ()=>{const r=cvs('cLow');if(!r)return;const[c,W,H]=r,L=30,B=20,T=8,bw=(W-L-6)/24,mx=Math.max(1,...lw.hist);c.clearRect(0,0,W,H);c.font='11px sans-serif';c.fillStyle='#7f8aa8';c.textAlign='right';c.textBaseline='middle';c.fillText(mx,L-4,T);c.fillText('0',L-4,H-B);
+      lw.hist.forEach((v,h)=>{c.fillStyle=h<6?C.vlo:C.lo;const hh=v/mx*(H-B-T);c.fillRect(L+h*bw+1,H-B-hh,bw-2,hh)});c.textAlign='center';c.textBaseline='top';c.fillStyle='#7f8aa8';for(let h=0;h<24;h+=3)c.fillText(h===0?'12a':h===12?'12p':(h%12)+(h<12?'a':'p'),L+h*bw+bw/2,H-B+4)}];
+  drawQ.forEach(f=>f())}
+function insOpen(){const pd=$('insPd');if(!pd.children.length)[[14,'14 d'],[30,'30 d'],[90,'90 d'],[180,'180 d']].forEach(([x,l])=>{const b=document.createElement('button');b.textContent=l;b.className=x===ipd?'on':'';b.onclick=()=>{ipd=x;[...pd.children].forEach(y=>y.className=y===b?'on':'');if(GA)renderInsights()};pd.append(b)});
+  if(!loadingLong&&(!GA||Date.now()-longAt>15*6e4))loadLong(false)}
+$('insBtn').onclick=()=>{if(!loadingLong)loadLong(true)};
+function demoLong(){const n=Date.now();LG=[];for(let t=Math.floor((n-180*DAY)/3e5)*3e5;t<=n;t+=3e5)LG.push({t,v:demoV(t)});LXT=[];LTB=LG.map(e=>({t:e.t,rate:Math.round(Math.max(0,Math.min(2.5,.75+(e.v-110)/90))*20)/20,dur:30}));
+  for(let d=0;d<180;d++){const s0=new Date();s0.setHours(0,0,0,0);s0.setDate(s0.getDate()-d);[[7.6,0],[12.6,1],[18.6,2]].forEach(([m,i])=>{const k=Math.floor((s0.getTime()+m*36e5)/DAY),c=m+rnd(k*3+i)*.8-.4,t=s0.getTime()+c*36e5,q=Math.round((40+rnd(k*7+i+9)*95)/3.5);if(t<n){LXT.push({t,carb:q,ins:0});LXT.push({t:t+6e4,carb:0,ins:Math.round(q)/10})}})}
+  LXT.sort((a,b)=>a.t-b.t);LPC=[];for(let k=59;k>=0;k--)LPC.push(n-(k*72+20)*36e5);if(!PF)PF={basal:[[0,.7],[21600,.85],[43200,.8],[72000,.7]],sens:[[0,45]],cr:[[0,10]],tlo:[[0,100]],thi:[[0,110]]}}
+function idb(){return new Promise((res,rej)=>{const r=indexedDB.open('gsl',1);r.onupgradeneeded=()=>r.result.createObjectStore('k');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
+async function idbGet(k){try{const d=await idb();return await new Promise(res=>{const q=d.transaction('k').objectStore('k').get(k);q.onsuccess=()=>res(q.result);q.onerror=()=>res(null)})}catch(e){return null}}
+async function idbSet(k,v){try{const d=await idb();d.transaction('k','readwrite').objectStore('k').put(v,k)}catch(e){}}
+async function loadLong(force){
+  if(loadingLong)return;loadingLong=true;const st=$('insStatus'),n=Date.now(),key='long:'+(S.url||'demo');
+  try{
+    if(demo()){st.textContent='Showing demo data. Connect Nightscout in Settings for your own history.';demoLong()}
+    else{
+      const cu=cleanUrl(S.url),base=cu.url,tok=S.token||cu.token,tk=tok?'&token='+encodeURIComponent(tok):'';
+      const jf=async u=>{const r=await fetch(base+u+tk);if(!r.ok)throw new Error('HTTP '+r.status);return r.json()};
+      if(!force){const c=await idbGet(key);if(c){LG=c.g;LXT=c.x;LTB=c.b;LPC=c.p}}else{LG=[];LXT=[];LTB=[];LPC=[]}
+      const from=LG.length?LG[LG.length-1].t-36e5:n-180*DAY,gm=new Map(LG.map(e=>[e.t,e])),xm=new Map(LXT.map(e=>[e.t+'|'+e.ins+'|'+e.carb,e])),bm=new Map(LTB.map(e=>[e.t+'|'+e.rate,e])),pr=[...LPC];
+      const ch=[];for(let a=from;a<n;a+=30*DAY)ch.push([a,Math.min(a+30*DAY,n+DAY)]);let k=0;
+      for(const[a,b]of ch){st.textContent='Loading glucose '+(++k)+' of '+ch.length+'...';(await jf('/api/v1/entries/sgv.json?count=20000&find%5Bdate%5D%5B%24gte%5D='+a+'&find%5Bdate%5D%5B%24lt%5D='+b)).forEach(e=>{if(e.sgv>0)gm.set(e.date,{t:e.date,v:e.sgv})})}
+      const tc=[];for(let a=from;a<n;a+=15*DAY)tc.push([a,Math.min(a+15*DAY,n+DAY)]);k=0;
+      for(const[a,b]of tc){st.textContent='Loading insulin and carbs '+(++k)+' of '+tc.length+'...';
+        (await jf('/api/v1/treatments.json?count=20000&find%5Bcreated_at%5D%5B%24gte%5D='+encodeURIComponent(new Date(a).toISOString())+'&find%5Bcreated_at%5D%5B%24lt%5D='+encodeURIComponent(new Date(b).toISOString()))).forEach(e=>{
+          const t=new Date(e.created_at||e.timestamp||e.date).getTime();if(!t)return;const ty=e.eventType||'';
+          if(/site change|insulin change|pod/i.test(ty)&&!/battery/i.test(ty))pr.push(t);
+          if(/temp basal/i.test(ty)){const r=e.rate!=null?+e.rate:(e.absolute!=null?+e.absolute:null);if(r!=null)bm.set(t+'|'+r,{t,rate:r,dur:+e.duration||0})}
+          else if(+e.insulin>0||+e.carbs>0)xm.set(t+'|'+(+e.insulin||0)+'|'+(+e.carbs||0),{t,ins:+e.insulin||0,carb:+e.carbs||0,smb:/SMB/i.test(ty)||!!e.isSMB})})}
+      const cut=n-185*DAY,srt=m=>[...m.values()].sort((x,y)=>x.t-y.t).filter(e=>e.t>cut);LG=srt(gm);LXT=srt(xm);LTB=srt(bm);
+      let loc=[];try{loc=JSON.parse(localStorage.getItem('gs_pods')||'[]')}catch(e){}
+      LPC=[];[...pr,...loc].filter(t=>t>cut).sort((x,y)=>x-y).forEach(t=>{if(!LPC.length||t-LPC[LPC.length-1]>6*36e5)LPC.push(t)});
+      if(!PF){try{parseProfile(await jf('/api/v1/profile.json'))}catch(e){}}
+      idbSet(key,{g:LG,x:LXT,b:LTB,p:LPC});
+      st.textContent='Loaded '+LG.length.toLocaleString()+' readings, '+LXT.length.toLocaleString()+' insulin and carb entries, '+LTB.length.toLocaleString()+' temp basals.'}
+    if(!LG.length){st.textContent='No glucose history found.';loadingLong=false;return}
+    buildSlices();longAt=Date.now();renderInsights()}
+  catch(e){st.textContent='Could not load history: '+(e.message||e)+'. Tap Refresh data to retry.'}
+  loadingLong=false}
 $('test').onclick=testConn;
 load(true);setInterval(()=>load(false),6e4);
 try{if(demo()&&!localStorage.getItem('gs_seen')){localStorage.setItem('gs_seen','1');$('cfg').click()}}catch(e){}
