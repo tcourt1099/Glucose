@@ -124,7 +124,8 @@ input,textarea{-webkit-user-select:text;user-select:text}
  header{flex-wrap:wrap;gap:8px 10px;padding:10px 16px 4px}
  #clock{font-size:34px}
  #date{font-size:13px;flex:1}
- #fs{display:none}
+ #date{min-width:0}
+ .ib{width:38px;height:38px}
  header .seg{order:5;flex:1}
  header .seg button{flex:1}
  .rowbar .sp{margin-left:0;width:100%}
@@ -648,7 +649,13 @@ function render(){const sl=applyTheme();tick();if(sl)drawSpark();else{drawChart(
 function show(v){$('now').hidden=v!=='now';$('rep').hidden=v!=='rep';$('ther').hidden=v!=='ther';$('tNow').className=v==='now'?'on':'';$('tRep').className=v==='rep'?'on':'';$('tTh').className=v==='ther'?'on':'';
   requestAnimationFrame(()=>{render();if(v==='rep')renderReports(true);if(v==='ther')renderTherapy(true)})}
 $('tNow').onclick=()=>show('now');$('tRep').onclick=()=>show('rep');$('tTh').onclick=()=>show('ther');
-$('fs').onclick=()=>{document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen?.()};
+// fullscreen with webkit fallback; iPhone Safari has no fullscreen API, so explain the home-screen route instead
+$('fs').onclick=async()=>{const d=document,el=d.documentElement,fe=d.fullscreenElement||d.webkitFullscreenElement;
+  try{if(fe){await(d.exitFullscreen||d.webkitExitFullscreen).call(d);return}
+    const rq=el.requestFullscreen||el.webkitRequestFullscreen;if(rq){await rq.call(el);return}}catch(e){}
+  const st=$('status'),old=st.textContent;st.textContent=navigator.standalone?'Already full screen':'For full screen on iPhone: Share → Add to Home Screen';setTimeout(()=>{if(st.textContent!==old)tick()},5000)};
+const fsSync=()=>{const on=!!(document.fullscreenElement||document.webkitFullscreenElement);$('fs').textContent=on?'⤡':'⛶';$('fs').title=$('fs').ariaLabel=on?'Exit full screen':'Full screen'};
+document.addEventListener('fullscreenchange',fsSync);document.addEventListener('webkitfullscreenchange',fsSync);
 $('snooze').onclick=()=>{snoozeUntil=Date.now()+(AL&&AL.k==='vlo'?15:30)*6e4;tick()};
 $('sleep').onclick=()=>{if(forceSleep)forceSleep=false;else wakeUntil=Date.now()+90e3;requestAnimationFrame(render)};
 $('sleepBtn').onclick=()=>{forceSleep=true;wakeUntil=0;requestAnimationFrame(render)};
