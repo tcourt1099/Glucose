@@ -118,6 +118,10 @@ input,textarea{-webkit-user-select:text;user-select:text}
 .t td.nt{text-align:left;color:var(--ink);white-space:normal}
 .t button.x{padding:3px 9px;font-size:13px;border-radius:8px}
 .up{color:var(--hi)}.dn{color:var(--ok)}
+#report{position:fixed;inset:0;z-index:40;overflow:auto;background:#e9ecf1;-webkit-user-select:text;user-select:text;-webkit-overflow-scrolling:touch}#report[hidden]{display:none}
+.rbar{position:sticky;top:0;z-index:2;display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:max(10px,env(safe-area-inset-top)) 14px 10px;background:#101722;border-bottom:1px solid #26344a}
+.rbar button{background:#18212e;color:#f4f7fb;border-color:#26344a}.rbar button.on{background:#f4f7fb;color:#080b11}
+#rpClose{margin-right:auto}.rbar button{padding:8px 12px}#rpMsg{order:9;flex-basis:100%;color:#a3b0c2;font-size:13px;line-height:1.35}#rpMsg:empty{display:none}#rpBody{padding:16px 10px 40px}
 @media (prefers-reduced-motion:reduce){#dim,#bg,body{transition:none}}
 @media (max-width:720px) and (orientation:portrait){
  #app{height:100dvh}
@@ -128,7 +132,8 @@ input,textarea{-webkit-user-select:text;user-select:text}
  .ib{width:38px;height:38px}
  header .seg{order:5;flex:1}
  header .seg button{flex:1}
- .rowbar .sp{margin-left:0;width:100%}
+ .rowbar .sp{margin-left:0;flex:1}
+ #copySum{flex:1}
  #pill{order:6;width:100%;max-width:none;margin:0}
  main{display:block;overflow-y:auto;padding:4px 16px 28px;-webkit-overflow-scrolling:touch}
  #left{display:block;overflow:visible}
@@ -178,7 +183,7 @@ input,textarea{-webkit-user-select:text;user-select:text}
   </div>
 </main>
 <section id="rep" hidden>
-  <div class="rowbar"><div id="pb" class="seg"></div><span id="histnote" class="note" style="margin:0"></span><button id="copySum" class="sp" title="Copy a text summary to paste into a message or patient portal">Copy summary for my doctor</button></div>
+  <div class="rowbar"><div id="pb" class="seg"></div><span id="histnote" class="note" style="margin:0"></span><button id="shareRep" class="sp on">Share report</button><button id="copySum" title="Copy a text summary to paste into a message or patient portal">Copy summary for my doctor</button></div>
   <div class="cards" id="cards"></div>
   <h2>Insights</h2><div class="ilist" id="insights"></div>
   <h2>Time in range</h2><div id="tir"></div><div id="tirl"></div>
@@ -192,7 +197,7 @@ input,textarea{-webkit-user-select:text;user-select:text}
     <button id="lAdd" class="on wide">Add result</button>
   </div>
   <div id="labs"></div>
-  <div class="note">Lab results are saved on this device only. A1C reflects roughly the last 3 months, so the 90-day GMI is the fairest comparison. A gap of ±0.5% between them is common.</div>
+  <div class="note">Lab results are saved on this device only. A1C reflects roughly the last 3 months, so the 90-day GMI is the fairest comparison. A gap of ±0.5% between them is common. GMI = 3.31 + 0.02392 × average mg/dL (the current clinical standard). eA1C = (average + 46.7) ÷ 28.7, the older ADAG formula many loop apps such as Trio show — it reads lower than GMI at most averages, and apps also differ in the days they average over.</div>
 </section>
 <section id="ther" hidden>
   <div class="rowbar"><div id="tp" class="seg"></div></div>
@@ -213,6 +218,7 @@ input,textarea{-webkit-user-select:text;user-select:text}
   <div id="sHint">Tap for details</div>
 </div>
 <div id="dim"></div>
+<div id="report" hidden><div class="rbar"><button id="rpClose" aria-label="Close report">✕ Close</button><span id="rpMsg"></span><button id="rpCopy">Copy</button><button id="rpPrint">Print / PDF</button><button id="rpShare" class="on">Share</button></div><div id="rpBody" class="r-doc"></div></div>
 
 <dialog id="dlg">
   <h3 style="margin:0 0 4px;font-size:20px">Settings</h3>
@@ -486,13 +492,13 @@ ch.addEventListener('pointerup',()=>{selT=setTimeout(()=>{sel=null;$('selinfo').
 function pct(a,p){const i=(a.length-1)*p,f=Math.floor(i);return a[f]+(a[Math.min(f+1,a.length-1)]-a[f])*(i-f)}
 function stats(a){const n=a.length;if(!n)return null;let sum=0;for(const e of a)sum+=e.v;const m=sum/n;let q=0;const b=[0,0,0,0,0];let ev=0,run=0;
   for(const e of a){q+=(e.v-m)**2;b[e.v<S.vlow?0:e.v<S.low?1:e.v<=S.high?2:e.v<=S.vhigh?3:4]++;if(e.v<S.low){run++;if(run===3)ev++}else run=0}
-  const sd=Math.sqrt(q/n);return{n,m,sd,cv:sd/m*100,gmi:3.31+.02392*m,b:b.map(x=>x/n*100),ev}}
+  const sd=Math.sqrt(q/n);return{n,m,sd,cv:sd/m*100,gmi:3.31+.02392*m,ea1c:(m+46.7)/28.7,b:b.map(x=>x/n*100),ev}}
 const dayStart=k=>{const s=new Date();s.setHours(0,0,0,0);s.setDate(s.getDate()-k);return s};
 const periodData=()=>D.slice(lb(D,dayStart(period-1).getTime()));
 function renderReports(force){if(!force&&repVer===dataVer)return;repVer=dataVer;
   const a=periodData(),s=stats(a);renderLabs();if(!s){$('cards').innerHTML=labCard();$('insights').innerHTML='<div class="note">No glucose readings for this period yet.</div>';return}
   const sdv=S.unit==='mmol'?(s.sd/MG).toFixed(1):Math.round(s.sd),nw=new Date(),cov=Math.min(100,s.n/(period===1?((nw.getHours()*60+nw.getMinutes())/5||1):period*288)*100);// coverage vs. the whole period, so missing history shows up honestly
-  $('cards').innerHTML=[[conv(s.m),'Average '+unitLbl()],[s.gmi.toFixed(1)+'%','GMI (est. A1C)'],[s.b[2].toFixed(0)+'%','In range'],[s.cv.toFixed(0)+'%','Variability (CV)'],[sdv,'Std deviation '+unitLbl()],[s.ev,'Low events (15 min+)'],[cov.toFixed(0)+'%','Sensor coverage']].map(([v,l])=>`<div class="card"><b>${v}</b><span>${l}</span></div>`).join('')+labCard(s);
+  $('cards').innerHTML=[[conv(s.m),'Average '+unitLbl()],[s.gmi.toFixed(1)+'%','GMI · est. A1C'],[s.ea1c.toFixed(1)+'%','eA1C · Trio-style'],[s.b[2].toFixed(0)+'%','In range'],[s.cv.toFixed(0)+'%','Variability (CV)'],[sdv,'Std deviation '+unitLbl()],[s.ev,'Low events (15 min+)'],[cov.toFixed(0)+'%','Sensor coverage']].map(([v,l])=>`<div class="card"><b>${v}</b><span>${l}</span></div>`).join('')+labCard(s);
   lastS=s;lastCov=cov;$('insights').innerHTML=insights(a,s,cov).map(x=>`<div class="insight ${x.tone}"><i></i><div><b>${x.t}</b>${x.d?`<span>${x.d}</span>`:''}</div></div>`).join('');
   const k=[P.vlo,P.lo,P.ok,P.hi,P.vhi];
   $('tir').innerHTML=s.b.map((p,i)=>`<div style="width:${p}%;background:${k[i]}">${p>=6?Math.round(p)+'%':''}</div>`).join('');
@@ -589,7 +595,7 @@ $('lAdd').onclick=()=>{const d=$('lDate').value,v=parseFloat($('lA1c').value),no
 /* ---------- summary for clinic ---------- */
 function summaryText(){const s=lastS;if(!s)return'';const pl=period===1?'Today':period===365?'Last 12 months':'Last '+period+' days',L=getLabs();
   const lines=[`Glucose summary — ${pl} (${new Date().toLocaleDateString([],{month:'short',day:'numeric',year:'numeric'})})`,
-   `Average: ${conv(s.m)} ${unitLbl()} · GMI: ${s.gmi.toFixed(1)}% · CV: ${s.cv.toFixed(0)}% · Sensor use: ${lastCov.toFixed(0)}%`,
+   `Average: ${conv(s.m)} ${unitLbl()} · GMI: ${s.gmi.toFixed(1)}% · eA1C (ADAG): ${s.ea1c.toFixed(1)}% · CV: ${s.cv.toFixed(0)}% · Sensor use: ${lastCov.toFixed(0)}%`,
    `Time in range ${conv(S.low)}–${conv(S.high)}: ${s.b[2].toFixed(0)}%`,
    `Below ${conv(S.low)}: ${(s.b[0]+s.b[1]).toFixed(1)}% (below ${conv(S.vlow)}: ${s.b[0].toFixed(1)}%) · Above ${conv(S.high)}: ${(s.b[3]+s.b[4]).toFixed(0)}% (above ${conv(S.vhigh)}: ${s.b[4].toFixed(0)}%)`,
    `Low episodes (15 min+): ${s.ev}`];
@@ -615,10 +621,7 @@ function thStats(period){const now=Date.now();let days=[];for(let i=0;i<period;i
   const tdd=(sum('bol')+sum('smb')+sum('bas'))/n,bas=sum('bas')/n,bolT=(sum('bol')+sum('smb'))/n,smbT=sum('smb')/n,carb=sum('car')/n,sch=sum('sch')/n;
   const schDay=PF&&PF.basal.length?24*PF.basal.reduce((p,b,i,arr)=>p+b[1]*(((arr[i+1]?arr[i+1][0]:86400)-b[0])/86400),0):null;
   return{days,full,n,sum,tdd,bas,bolT,smbT,carb,sch,schDay}}
-function renderTherapy(force){if(!force&&thVer===dataVer)return;thVer=dataVer;const period=tPeriod;
-  const{days,full,sum,tdd,bas,bolT,smbT,carb,sch,schDay}=thStats(period);
-  const pc=x=>tdd>0?Math.round(x/tdd*100)+'%':'--';
-  $('tcards').innerHTML=full.length?[[tdd.toFixed(1)+' U','Avg total daily dose'],[pc(bas),'Basal share'],[pc(bolT),'Bolus share (incl. SMB)'],[smbT.toFixed(1)+' U','SMB per day'],[Math.round(carb)+' g','Carbs per day'],[schDay!=null?schDay.toFixed(1)+' U':'--','Scheduled basal / day']].map(([v,l])=>`<div class="card"><b>${v}</b><span>${l}</span></div>`).join(''):'<div class="note">No insulin data yet for full days. Treatments from Nightscout will appear here.</div>';
+function thInsights(period){const{full,sum,tdd,bas,smbT,sch}=thStats(period);
   const out=[],add=(tone,t,d)=>out.push({tone,t,d});
   if(full.length>=3&&sch>0){const r=sum('bas')/sum('sch');
     if(r<.8)add('watch',`Loop delivered ${Math.round((1-r)*100)}% less basal than scheduled`,'When the loop routinely cuts basal, scheduled basal may be set higher than needed. Worth reviewing with your endo.');
@@ -631,14 +634,161 @@ function renderTherapy(force){if(!force&&thVer===dataVer)return;thVer=dataVer;co
   if(tdd>0&&full.length>=3){const bp=bas/tdd*100;if(bp>60)add('info',`Basal is ${Math.round(bp)}% of total insulin`,'Many people land near 40–60% basal. A higher share can mean basal is covering food — something to ask about.');else if(bp<30)add('info',`Basal is ${Math.round(bp)}% of total insulin`,'This is on the low side for many people, common with SMB-heavy loops.')}
   if(tdd>0&&full.length>=3&&smbT/tdd>.3)add('info',`SMBs make up ${Math.round(smbT/tdd*100)}% of insulin`,'The loop is doing a lot of correcting with microboluses — meal boluses or carb ratios might be worth reviewing.');
   if(!out.length)add('info','Not enough data for therapy insights yet','Insights appear after a few full days of insulin data.');
+  return out}
+function profHTML(){if(PF){const ts=[...new Set([].concat(...['basal','sens','cr','tlo'].map(k=>(PF[k]||[]).map(e=>e[0]))))].sort((p,q)=>p-q),v=(k,t)=>PF[k]&&PF[k].length?(()=>{let x=PF[k][0][1];for(const e of PF[k])if(e[0]<=t)x=e[1];return x})():null;
+    return `<table class="t"><tr><th>From</th><th>Basal U/h</th><th>ISF ${unitLbl()}/U</th><th>Carb ratio g/U</th><th>Target ${unitLbl()}</th></tr>${ts.map(t=>{const lo=v('tlo',t),hi=v('thi',t);return`<tr><td>${hm(t)}</td><td>${fmt(v('basal',t),2)}</td><td>${v('sens',t)!=null?conv(v('sens',t)):'--'}</td><td>${fmt(v('cr',t),1)}</td><td>${lo!=null?conv(lo)+(hi!=null&&hi!==lo?'–'+conv(hi):''):'--'}</td></tr>`}).join('')}</table>`}
+  else return '<div class="note">No profile found in Nightscout yet.</div>';
+}
+function renderTherapy(force){if(!force&&thVer===dataVer)return;thVer=dataVer;const period=tPeriod;
+  const{days,full,sum,tdd,bas,bolT,smbT,carb,sch,schDay}=thStats(period);
+  const pc=x=>tdd>0?Math.round(x/tdd*100)+'%':'--';
+  $('tcards').innerHTML=full.length?[[tdd.toFixed(1)+' U','Avg total daily dose'],[pc(bas),'Basal share'],[pc(bolT),'Bolus share (incl. SMB)'],[smbT.toFixed(1)+' U','SMB per day'],[Math.round(carb)+' g','Carbs per day'],[schDay!=null?schDay.toFixed(1)+' U':'--','Scheduled basal / day']].map(([v,l])=>`<div class="card"><b>${v}</b><span>${l}</span></div>`).join(''):'<div class="note">No insulin data yet for full days. Treatments from Nightscout will appear here.</div>';
+  const out=thInsights(period);
   $('tins').innerHTML=out.map(x=>`<div class="insight ${x.tone}"><i></i><div><b>${x.t}</b>${x.d?`<span>${x.d}</span>`:''}</div></div>`).join('');
-  if(PF){const ts=[...new Set([].concat(...['basal','sens','cr','tlo'].map(k=>(PF[k]||[]).map(e=>e[0]))))].sort((p,q)=>p-q),v=(k,t)=>PF[k]&&PF[k].length?(()=>{let x=PF[k][0][1];for(const e of PF[k])if(e[0]<=t)x=e[1];return x})():null;
-    $('prof').innerHTML=`<table class="t"><tr><th>From</th><th>Basal U/h</th><th>ISF ${unitLbl()}/U</th><th>Carb ratio g/U</th><th>Target ${unitLbl()}</th></tr>${ts.map(t=>{const lo=v('tlo',t),hi=v('thi',t);return`<tr><td>${hm(t)}</td><td>${fmt(v('basal',t),2)}</td><td>${v('sens',t)!=null?conv(v('sens',t)):'--'}</td><td>${fmt(v('cr',t),1)}</td><td>${lo!=null?conv(lo)+(hi!=null&&hi!==lo?'–'+conv(hi):''):'--'}</td></tr>`}).join('')}</table>`}
-  else $('prof').innerHTML='<div class="note">No profile found in Nightscout yet.</div>';
+  $('prof').innerHTML=profHTML();
   const rows=[];for(let i=0;i<period;i++){const ds=dayStart(i),s0=ds.getTime(),e0=new Date(ds.getFullYear(),ds.getMonth(),ds.getDate()+1).getTime();let bol=0,smb=0,car=0;
     for(let j=lb(TX,s0);j<TX.length&&TX[j].t<e0;j++){const e=TX[j];e.smb?smb+=e.ins:bol+=e.ins;car+=e.carb}const bas=basalBetween(s0,e0);
     rows.push(`<tr><td>${i===0?'Today (so far)':ds.toLocaleDateString([],{weekday:'short',day:'numeric'})}</td><td>${bol.toFixed(1)}</td><td>${smb.toFixed(1)}</td><td>${bas.toFixed(1)}</td><td>${(bol+smb+bas).toFixed(1)}</td><td>${Math.round(car)}</td></tr>`)}
   $('ins').innerHTML=`<table class="t"><tr><th></th><th>Bolus U</th><th>SMB U</th><th>Basal U (est.)</th><th>Total U</th><th>Carbs g</th></tr>${rows.join('')}</table>`}
+
+/* ---------- full clinical report (share / print / save as PDF) ---------- */
+const RC={ink:'#111827',mute:'#5b6472',line:'#d9dee5',soft:'#f3f5f8',vlo:'#a3122b',lo:'#e23b52',ok:'#1f9d6b',hi:'#e8a317',vhi:'#e0662a',band:'#3b5bdb',IOB:'#3b5bdb',COB:'#d9822b',UAM:'#b59a00',ZT:'#0e9fb5',Loop:'#7c4dff'};
+const rcol=v=>v<S.vlow?RC.vlo:v<S.low?RC.lo:v<=S.high?RC.ok:v<=S.vhigh?RC.hi:RC.vhi;
+const fD=t=>new Date(t).toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'});
+const fT=t=>new Date(t).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
+const sinceDays=d=>D.slice(lb(D,dayStart(d-1).getTime()));
+function pstat(d){const a=d===1?D.slice(lb(D,dayStart(0).getTime())):sinceDays(d),s=stats(a);if(!s)return null;const n=new Date();
+  s.cov=Math.min(100,s.n/(d===1?((n.getHours()*60+n.getMinutes())/5||1):d*288)*100);s.days=new Set(a.map(e=>new Date(e.t).toDateString())).size;return s}
+function mkC(w,h){const c=document.createElement('canvas');c.width=w*2;c.height=h*2;const g=c.getContext('2d');g.scale(2,2);g.fillStyle='#fff';g.fillRect(0,0,w,h);return[c,g]}
+const yA=(g,L,W,Y,vals)=>{g.font='11px '+FONT;g.textAlign='right';g.textBaseline='middle';vals.forEach(v=>{g.strokeStyle=RC.line;g.setLineDash([3,4]);g.beginPath();g.moveTo(L,Y(v));g.lineTo(W-8,Y(v));g.stroke();g.setLineDash([]);g.fillStyle=RC.mute;g.fillText(conv(v),L-5,Y(v))})};
+function agpImg(a,W=960,H=330){const[c,g]=mkC(W,H),L=40,B=22,T=10,ymin=40,ymax=350,X=i=>L+i/95*(W-L-8),Y=v=>T+(1-(Math.min(Math.max(v,ymin),ymax)-ymin)/(ymax-ymin))*(H-T-B);
+  const bk=Array.from({length:96},()=>[]);a.forEach(e=>{const d=new Date(e.t);bk[Math.floor((d.getHours()*60+d.getMinutes())/15)].push(e.v)});
+  const Q=bk.map(x=>{x.sort((p,q)=>p-q);return x.length>3?[.05,.25,.5,.75,.95].map(q=>pct(x,q)):null});
+  g.fillStyle='rgba(31,157,107,.08)';g.fillRect(L,Y(S.high),W-L-8,Y(S.low)-Y(S.high));yA(g,L,W,Y,[S.vlow,S.low,S.high,S.vhigh]);
+  g.textAlign='center';g.textBaseline='top';const hl=h=>h%24===0?'12a':h===12?'12p':(h%12)+(h<12?'a':'p');for(let h=0;h<=24;h+=3){g.fillStyle=RC.mute;g.fillText(hl(h),L+h*4/95*(W-L-8),H-B+6)}
+  const band=(lo,hi,col)=>{g.fillStyle=col;g.beginPath();let st=false;Q.forEach((p,i)=>{if(p){st?g.lineTo(X(i),Y(p[hi])):(g.moveTo(X(i),Y(p[hi])),st=true)}});for(let i=95;i>=0;i--)if(Q[i])g.lineTo(X(i),Y(Q[i][lo]));g.closePath();g.fill()};
+  band(0,4,'rgba(59,91,219,.13)');band(1,3,'rgba(59,91,219,.32)');g.strokeStyle=RC.band;g.lineWidth=2.4;g.beginPath();let st=false;Q.forEach((p,i)=>{if(p){st?g.lineTo(X(i),Y(p[2])):(g.moveTo(X(i),Y(p[2])),st=true)}});g.stroke();
+  return{src:c.toDataURL('image/png'),Q}}
+function gridImg(days,W=960){const rh=22,H=days*rh+24,[c,g]=mkC(W,H),L=86,cw=(W-L-6)/48;g.font='11px '+FONT;
+  for(let i=0;i<days;i++){const ds=dayStart(days-1-i),s0=ds.getTime(),e0=s0+864e5,cells=Array.from({length:48},()=>[0,0]);
+    for(let j=lb(D,s0);j<D.length&&D[j].t<e0;j++){const k=Math.min(47,Math.floor((D[j].t-s0)/18e5));cells[k][0]+=D[j].v;cells[k][1]++}
+    g.fillStyle=RC.mute;g.textAlign='right';g.textBaseline='middle';g.fillText(ds.toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'}),L-8,i*rh+rh/2+2);
+    cells.forEach((x,j)=>{g.fillStyle=x[1]?rcol(x[0]/x[1]):RC.soft;g.fillRect(L+j*cw,i*rh+3,cw-1.2,rh-4)})}
+  g.fillStyle=RC.mute;g.textAlign='center';g.textBaseline='top';['12a','6a','12p','6p'].forEach((t,k)=>g.fillText(t,L+k*12*cw,days*rh+7));return c.toDataURL('image/png')}
+function traceImg(ds,W=440,H=120){const[c,g]=mkC(W,H),s0=ds.getTime(),e0=s0+864e5,L=30,B=16,T=6,ymin=40,ymax=320,X=t=>L+(t-s0)/864e5*(W-L-6),Y=v=>T+(1-(Math.min(Math.max(v,ymin),ymax)-ymin)/(ymax-ymin))*(H-T-B);
+  g.fillStyle='rgba(31,157,107,.09)';g.fillRect(L,Y(S.high),W-L-6,Y(S.low)-Y(S.high));yA(g,L,W,Y,[S.low,S.high]);
+  g.fillStyle=RC.mute;g.textAlign='center';g.textBaseline='top';['12a','6a','12p','6p','12a'].forEach((t,k)=>g.fillText(t,L+k*(W-L-6)/4,H-B+4));
+  for(let j=lb(D,s0);j<D.length&&D[j].t<e0;j++){const e=D[j];g.fillStyle=rcol(e.v);g.beginPath();g.arc(X(e.t),Y(e.v),1.7,0,7);g.fill()}
+  for(let j=lb(TX,s0);j<TX.length&&TX[j].t<e0;j++){const e=TX[j];if(e.carb>0){g.fillStyle=RC.COB;g.beginPath();g.arc(X(e.t),H-B-6,3.5,0,7);g.fill()}if(e.ins>0&&!e.smb){g.fillStyle=RC.IOB;g.fillRect(X(e.t)-1.5,H-B-18,3,7)}}
+  return c.toDataURL('image/png')}
+function episodes(a,test,minN){const out=[];let cur=null;
+  for(let i=0;i<a.length;i++){const e=a[i],p=a[i-1],gap=p&&e.t-p.t>11*6e4;
+    if(test(e.v)&&!(cur&&gap)){if(!cur)cur={a:e.t,b:e.t,n:0,x:e.v};cur.b=e.t;cur.n++;cur.x=test===lowT?Math.min(cur.x,e.v):Math.max(cur.x,e.v)}
+    else{if(cur&&cur.n>=minN)out.push(cur);cur=test(e.v)?{a:e.t,b:e.t,n:1,x:e.v}:null}}
+  if(cur&&cur.n>=minN)out.push(cur);return out}
+const lowT=v=>v<S.low,vhiT=v=>v>S.vhigh;
+function mealRows(days){const t0=dayStart(days-1).getTime(),out=[];
+  for(let i=lb(TX,t0);i<TX.length;i++){const e=TX[i];if(e.carb<10)continue;let bol=0;for(let j=lb(TX,e.t-20*6e4);j<TX.length&&TX[j].t<=e.t+30*6e4;j++)if(!TX[j].smb)bol+=TX[j].ins;
+    const b0=D[lb(D,e.t-10*6e4)];if(!b0||Math.abs(b0.t-e.t)>15*6e4)continue;let pk=b0,a3=null;
+    for(let j=lb(D,e.t);j<D.length&&D[j].t<=e.t+3*36e5;j++){if(D[j].v>pk.v)pk=D[j];a3=D[j]}
+    if(e.t+3*36e5>Date.now())a3=null;out.push({t:e.t,carb:e.carb,bol,start:b0.v,peak:pk.v,ttp:Math.round((pk.t-e.t)/6e4),rise:pk.v-b0.v,at3:a3&&a3.t>e.t+150*6e4?a3.v:null})}
+  return out}
+const rIns=list=>list.map(x=>`<div class="r-ins r-${x.tone}"><b>${x.t}</b>${x.d?`<span>${x.d}</span>`:''}</div>`).join('');
+const rTbl=(head,rows,cls='')=>`<table class="r-t ${cls}"><thead><tr>${head.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.length?rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join(''):`<tr><td colspan="${head.length}" class="r-empty">None in this period</td></tr>`}</tbody></table>`;
+const tirBar=s=>{const k=[RC.vlo,RC.lo,RC.ok,RC.hi,RC.vhi];return`<div class="r-tir">${s.b.map((p,i)=>`<i style="width:${p}%;background:${k[i]}">${p>=7?Math.round(p)+'%':''}</i>`).join('')}</div>`};
+const RCSS=`.r-doc{font:13.5px/1.5 -apple-system,system-ui,"Segoe UI",Roboto,sans-serif;color:${RC.ink};-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.r-pg{background:#fff;max-width:860px;margin:0 auto 18px;padding:34px 40px;border-radius:6px;box-shadow:0 2px 14px rgba(0,0,0,.18)}
+.r-hd{display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid ${RC.ink};padding-bottom:6px;margin-bottom:16px;gap:10px}
+.r-hd h2{font-size:19px;margin:0;font-weight:700;color:${RC.ink};letter-spacing:0;text-transform:none}.r-hd span{color:${RC.mute};font-size:12px;white-space:nowrap}
+.r-doc h1{font-size:30px;line-height:1.1;margin:0 0 6px}.r-doc h3{font-size:14px;margin:18px 0 6px}
+.r-sub{color:${RC.mute};margin:0 0 18px}.r-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:8px;margin:12px 0}
+.r-k{border:1px solid ${RC.line};border-radius:8px;padding:9px 11px}.r-k b{display:block;font-size:22px;font-variant-numeric:tabular-nums}.r-k span{font-size:11.5px;color:${RC.mute}}
+.r-tir{display:flex;height:26px;border-radius:5px;overflow:hidden;gap:2px;margin:4px 0}.r-tir i{display:flex;align-items:center;justify-content:center;font:700 11px system-ui;color:#fff;font-style:normal;min-width:0}
+.r-t{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:12px;margin:6px 0}.r-t th{background:${RC.soft};color:${RC.mute};font-weight:600;text-align:right;padding:6px 7px;border-bottom:1px solid ${RC.line}}
+.r-t td{padding:5px 7px;text-align:right;border-bottom:1px solid ${RC.line}}.r-t td:first-child,.r-t th:first-child{text-align:left}.r-t tr{break-inside:avoid}@media print{.r-t td{padding:3.5px 7px}.r-t th{padding:5px 7px}}.r-t .r-l{text-align:left}.r-empty{text-align:center!important;color:${RC.mute}}
+.r-ins{border-left:4px solid ${RC.band};background:${RC.soft};padding:8px 12px;margin:6px 0;border-radius:0 6px 6px 0;break-inside:avoid}.r-ins b{display:block}.r-ins span{color:${RC.mute};font-size:12.5px}
+.r-good{border-color:${RC.ok}}.r-watch{border-color:${RC.hi}}.r-alert{border-color:${RC.lo}}.r-info{border-color:${RC.band}}
+.r-img{width:100%;height:auto;display:block;border:1px solid ${RC.line};border-radius:6px}.r-grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}.r-grid2 figure{margin:0;break-inside:avoid}.r-grid2 figcaption{font-size:11.5px;color:${RC.mute};margin-bottom:2px}
+.r-note{color:${RC.mute};font-size:11.5px;margin-top:8px}.r-lg{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:${RC.mute}}.r-lg i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+.r-ul{margin:6px 0 0;padding-left:20px}.r-ul li{margin:3px 0}
+@media (max-width:640px){.r-pg{padding:20px 16px}.r-grid2{grid-template-columns:1fr}.r-t{font-size:11px}.r-t th,.r-t td{padding:4px}}`;
+const PRINT_CSS=`@page{size:letter;margin:12mm}@media print{html,body{height:auto!important;overflow:visible!important;background:#fff!important}
+body>*:not(#report){display:none!important}#report{position:static!important;overflow:visible!important;background:#fff!important;padding:0!important}.rbar{display:none!important}
+.r-pg{box-shadow:none!important;margin:0!important;padding:0!important;max-width:none!important;border-radius:0!important;break-after:page;page-break-after:always}.r-pg:last-child{break-after:auto}}`;
+function reportBody(){const now=Date.now(),U=unitLbl(),pages=[],P=(title,body)=>pages.push(`<section class="r-pg"><div class="r-hd"><h2>${title}</h2><span>${new Date(now).toLocaleDateString([],{month:'short',day:'numeric',year:'numeric'})} · page ${pages.length+1}/__N__</span></div>${body}</section>`);
+  const s14=pstat(14),s90=pstat(90);if(!s14)return null;const L=getLabs(),lab=L[0],a14=sinceDays(14),a30=sinceDays(30),a90=sinceDays(90);
+  const first=D.length?D[0].t:now,histDays=Math.round((now-first)/864e5),pd=[1,7,14,30,90,365].filter(d=>d<=Math.max(14,histDays+1));
+  const disc=insights(a14,s14,s14.cov).filter(x=>x.tone==='watch'||x.tone==='alert').concat(thInsights(14).filter(x=>x.tone==='watch'));
+  const kp=(v,l)=>`<div class="r-k"><b>${v}</b><span>${l}</span></div>`;
+  // 1 cover
+  P('Summary',`<h1>Glucose &amp; therapy summary</h1><p class="r-sub">${fD(dayStart(13))} – ${fD(now)} (14 days) · source: ${demo()?'demo data':'Nightscout'} · units ${U} · target ${conv(S.low)}–${conv(S.high)}</p>
+   <div class="r-kpis">${kp(conv(s14.m),'Average '+U)+kp(s14.gmi.toFixed(1)+'%','GMI (est. A1C)')+kp(s14.ea1c.toFixed(1)+'%','eA1C (ADAG)')+kp(s14.b[2].toFixed(0)+'%','Time in range')+kp((s14.b[0]+s14.b[1]).toFixed(1)+'%','Below '+conv(S.low))+kp((s14.b[3]+s14.b[4]).toFixed(0)+'%','Above '+conv(S.high))+kp(s14.cv.toFixed(0)+'%','Variability (CV)')+kp(s14.cov.toFixed(0)+'%','Sensor coverage')+(lab?kp(lab.a1c.toFixed(1)+'%','Lab A1C · '+fmtD(lab.d)):'')+(s90&&s90.cov>60?kp(s90.gmi.toFixed(1)+'%','90-day GMI'):'')}</div>
+   <h3>Time in ranges · 14 days</h3>${tirBar(s14)}<div class="r-lg"><span><i style="background:${RC.vlo}"></i>&lt;${conv(S.vlow)} ${s14.b[0].toFixed(1)}%</span><span><i style="background:${RC.lo}"></i>${conv(S.vlow)}–${conv(S.low)} ${s14.b[1].toFixed(1)}%</span><span><i style="background:${RC.ok}"></i>${conv(S.low)}–${conv(S.high)} ${s14.b[2].toFixed(0)}%</span><span><i style="background:${RC.hi}"></i>${conv(S.high)}–${conv(S.vhigh)} ${s14.b[3].toFixed(0)}%</span><span><i style="background:${RC.vhi}"></i>&gt;${conv(S.vhigh)} ${s14.b[4].toFixed(1)}%</span></div>
+   <h3>Points to discuss</h3>${disc.length?`<ul class="r-ul">${disc.map(x=>`<li>${x.t}</li>`).join('')}</ul>`:'<p class="r-sub">No flagged items — glucose metrics are within consensus targets for this period.</p>'}
+   ${lab&&lab.note?`<h3>Last visit note</h3><p>${esc(lab.note)}</p>`:''}<p class="r-note">Consensus targets (International Consensus on Time in Range, 2019): time in range &gt;70%, below ${conv(S.low)} &lt;4%, below ${conv(S.vlow)} &lt;1%, above ${conv(S.vhigh)} &lt;5%, CV ≤36%. This report is patient-generated from CGM and loop data and is meant to support, not replace, clinical review.</p>`);
+  // 2 insights
+  P('Insights',`<h3>Last 14 days</h3>${rIns(insights(a14,s14,s14.cov))}${s90&&s90.cov>40?`<h3>Last 90 days</h3>${rIns(insights(a90,s90,s90.cov).filter(x=>!/lab A1C|Add your latest/i.test(x.t)))}`:''}`);
+  // 3 stats by period
+  const sr=pd.map(d=>{const s=pstat(d);return s?[d===1?'Today':d===365?'12 months':d+' days',s.cov.toFixed(0)+'%',conv(s.m),S.unit==='mmol'?(s.sd/MG).toFixed(1):Math.round(s.sd),s.cv.toFixed(0)+'%',s.gmi.toFixed(1)+'%',s.ea1c.toFixed(1)+'%',s.b[0].toFixed(1)+'%',(s.b[0]+s.b[1]).toFixed(1)+'%','<b>'+s.b[2].toFixed(0)+'%</b>',(s.b[3]+s.b[4]).toFixed(0)+'%',s.b[4].toFixed(1)+'%',s.ev]:null}).filter(Boolean);
+  P('Statistics by period',rTbl(['Period','Sensor','Avg','SD','CV','GMI','eA1C','<'+conv(S.vlow),'<'+conv(S.low),'In range','>'+conv(S.high),'>'+conv(S.vhigh),'Lows'],sr)+
+   `<h3>Time in range by period</h3>${pd.map(d=>{const s=pstat(d);return s?`<div style="display:grid;grid-template-columns:80px 1fr;gap:8px;align-items:center;font-size:12px"><span>${d===1?'Today':d===365?'12 months':d+' days'}</span>${tirBar(s)}</div>`:''}).join('')}
+   <p class="r-note">GMI = 3.31 + 0.02392 × mean mg/dL (Bergenstal 2018). eA1C = (mean + 46.7) ÷ 28.7 (ADAG 2008), the formula many loop apps such as Trio display. "Lows" = episodes below ${conv(S.low)} lasting 15 min or more. Sensor = share of expected 5-minute readings present.${histDays<360?` Nightscout history currently covers about ${histDays} days.`:''}</p>`);
+  // 4 AGP 14 + 5 AGP 90
+  const ag=agpImg(a14),hrs=[];for(let h=0;h<24;h++){const q=ag.Q.slice(h*4,h*4+4).filter(Boolean);if(q.length)hrs.push([h,q.reduce((p,x)=>p+x[2],0)/q.length,q.reduce((p,x)=>p+x[3]-x[1],0)/q.length])}
+  const hmx=hrs.slice().sort((p,q)=>q[1]-p[1])[0],hmn=hrs.slice().sort((p,q)=>p[1]-q[1])[0],hiq=hrs.slice().sort((p,q)=>q[2]-p[2])[0],hh=h=>(h%12||12)+(h<12?' am':' pm');
+  P('Ambulatory glucose profile · 14 days',`<img class="r-img" src="${ag.src}" alt="AGP 14 days"><div class="r-lg" style="margin-top:6px"><span><i style="background:${RC.band}"></i>median</span><span><i style="background:rgba(59,91,219,.4)"></i>25–75%</span><span><i style="background:rgba(59,91,219,.15)"></i>5–95%</span><span><i style="background:rgba(31,157,107,.2)"></i>target range</span></div>
+   ${hmx?`<h3>Reading the profile</h3><ul class="r-ul"><li>Highest median around <b>${hh(hmx[0])}</b> (${conv(hmx[1])} ${U}).</li><li>Lowest median around <b>${hh(hmn[0])}</b> (${conv(hmn[1])} ${U}).</li><li>Most day-to-day variation around <b>${hh(hiq[0])}</b> (25–75% spread ${conv(hiq[2])} ${U}).</li></ul>`:''}`);
+  if(s90&&s90.n>288*20)P('Ambulatory glucose profile · 90 days',`<img class="r-img" src="${agpImg(a90).src}" alt="AGP 90 days"><p class="r-note">Same layout as the 14-day profile, using ${s90.days} days with data (${s90.cov.toFixed(0)}% sensor coverage). Compare with the 14-day profile to see whether recent patterns are new or long-standing.</p>`);
+  // 6 hourly
+  const hr=[];for(let h=0;h<24;h++){const v=a30.filter(e=>new Date(e.t).getHours()===h).map(e=>e.v).sort((p,q)=>p-q);if(!v.length){hr.push([hh(h),'—','—','—','—','—','—']);continue}
+    const m=v.reduce((p,q)=>p+q)/v.length;hr.push([hh(h),conv(m),conv(pct(v,.5)),conv(pct(v,.1))+'–'+conv(pct(v,.9)),(v.filter(x=>x<S.low).length/v.length*100).toFixed(1)+'%','<b>'+(v.filter(x=>x>=S.low&&x<=S.high).length/v.length*100).toFixed(0)+'%</b>',(v.filter(x=>x>S.high).length/v.length*100).toFixed(0)+'%'])}
+  P('Hour-by-hour · 30 days',rTbl(['Hour','Mean','Median','10–90%','Low','In range','High'],hr));
+  // 7 weekday
+  const wd=[0,1,2,3,4,5,6].map(k=>{const v=a90.filter(e=>new Date(e.t).getDay()===k),s=stats(v);return s?[new Date(2024,0,7+k).toLocaleDateString([],{weekday:'long'}),Math.round(s.n/288*10)/10,conv(s.m),s.cv.toFixed(0)+'%',(s.b[0]+s.b[1]).toFixed(1)+'%','<b>'+s.b[2].toFixed(0)+'%</b>',(s.b[3]+s.b[4]).toFixed(0)+'%']:null}).filter(Boolean);
+  P('Day-of-week patterns · 90 days',rTbl(['Day','Days of data','Mean','CV','Low','In range','High'],wd)+'<p class="r-note">Useful for spotting routine-driven patterns such as weekends, workdays or exercise days.</p>');
+  // 8 daily summaries
+  const dr=[];for(let i=0;i<30;i++){const ds=dayStart(i),s0=ds.getTime(),v=D.slice(lb(D,s0),lb(D,s0+864e5)),s=stats(v);if(!s)continue;let bol=0,car=0;for(let j=lb(TX,s0);j<TX.length&&TX[j].t<s0+864e5;j++){bol+=TX[j].ins;car+=TX[j].carb}
+    dr.push([i===0?'Today':ds.toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'}),conv(s.m),s.cv.toFixed(0)+'%',(s.b[0]+s.b[1]).toFixed(1)+'%','<b>'+s.b[2].toFixed(0)+'%</b>',(s.b[3]+s.b[4]).toFixed(0)+'%',s.ev,i<15&&TX.length?bol.toFixed(1):'—',i<15&&TX.length?Math.round(car):'—'])}
+  P('Daily summaries · 30 days',rTbl(['Day','Mean','CV','Low','In range','High','Lows','Bolus U','Carbs g'],dr)+'<p class="r-note">Bolus includes SMBs. Insulin and carbs are available for the last 14 days.</p>');
+  // 9 heat grid + traces
+  P('Day by day · 30-minute averages',`<img class="r-img" src="${gridImg(Math.min(30,Math.max(1,histDays+1)))}" alt="Daily grid"><div class="r-lg" style="margin-top:6px"><span><i style="background:${RC.vlo}"></i>&lt;${conv(S.vlow)}</span><span><i style="background:${RC.lo}"></i>low</span><span><i style="background:${RC.ok}"></i>in range</span><span><i style="background:${RC.hi}"></i>high</span><span><i style="background:${RC.vhi}"></i>&gt;${conv(S.vhigh)}</span></div>`);
+  P('Daily glucose traces · 14 days',`<div class="r-lg" style="margin-bottom:6px"><span><i style="background:${RC.IOB}"></i>meal/correction bolus</span><span><i style="background:${RC.COB};border-radius:50%"></i>carbs</span></div><div class="r-grid2">${Array.from({length:14},(_,i)=>dayStart(i)).map(ds=>`<figure><figcaption>${fD(ds)}</figcaption><img class="r-img" src="${traceImg(ds)}" alt=""></figure>`).join('')}</div>`);
+  // 10 lows / highs
+  const lo=episodes(a30,lowT,3).reverse(),hi=episodes(a30,vhiT,6).reverse(),blkN=t=>BLK[blkOf(t)][0];
+  const lc=BLK.map(b=>lo.filter(e=>blkN(e.a)===b[0]).length);
+  P('Low glucose episodes · 30 days',`<p class="r-sub">${lo.length} episode${lo.length===1?'':'s'} below ${conv(S.low)} lasting 15 min or more · by time of day: ${BLK.map((b,i)=>b[0]+' '+lc[i]).join(', ')}</p>`+rTbl(['Start','Time of day','Duration','Lowest'],lo.slice(0,40).map(e=>[fD(e.a)+' '+fT(e.a),blkN(e.a),Math.round((e.b-e.a)/6e4+5)+' min','<b>'+conv(e.x)+'</b>']))+(lo.length>40?`<p class="r-note">Showing the 40 most recent of ${lo.length}.</p>`:''));
+  P('High glucose episodes · 30 days',`<p class="r-sub">${hi.length} episode${hi.length===1?'':'s'} above ${conv(S.vhigh)} lasting 30 min or more</p>`+rTbl(['Start','Time of day','Duration','Highest'],hi.slice(0,40).map(e=>[fD(e.a)+' '+fT(e.a),blkN(e.a),Math.round((e.b-e.a)/6e4+5)+' min','<b>'+conv(e.x)+'</b>']))+(hi.length>40?`<p class="r-note">Showing the 40 most recent of ${hi.length}.</p>`:''));
+  // 11 meals
+  const mr=mealRows(14),slot=t=>{const h=new Date(t).getHours();return h<11?'Breakfast':h<16?'Lunch':'Dinner'},ms=['Breakfast','Lunch','Dinner'].map(n=>{const r=mr.filter(x=>slot(x.t)===n);return r.length?[n,r.length,Math.round(r.reduce((p,x)=>p+x.carb,0)/r.length)+' g',conv(r.reduce((p,x)=>p+x.start,0)/r.length),'<b>'+conv(r.reduce((p,x)=>p+x.rise,0)/r.length)+'</b>',Math.round(r.reduce((p,x)=>p+x.ttp,0)/r.length)+' min']:null}).filter(Boolean);
+  P('Meals · 14 days',`<h3>Averages by meal</h3>`+rTbl(['Meal','Count','Carbs','Start','Rise','Time to peak'],ms)+`<h3>Each logged meal (10 g or more)</h3>`+rTbl(['When','Carbs','Bolus U','Start','Peak','Rise','Peak at','3 h later'],mr.slice().reverse().slice(0,30).map(x=>[fD(x.t)+' '+fT(x.t),x.carb+' g',x.bol?x.bol.toFixed(1):'—',conv(x.start),conv(x.peak),'<b>'+(x.rise>=0?'+':'')+conv(x.rise)+'</b>',x.ttp+' min',x.at3!=null?conv(x.at3):'—']))+'<p class="r-note">Bolus = non-SMB insulin logged from 20 min before to 30 min after the carb entry. Rise = peak within 3 h minus glucose at the meal.</p>');
+  // 12 therapy
+  const th=thStats(14),pc=x=>th.tdd>0?Math.round(x/th.tdd*100)+'%':'--';
+  P('Insulin therapy · 14 days',th.full.length?`<div class="r-kpis">${kp(th.tdd.toFixed(1)+' U','Avg total daily dose')+kp(pc(th.bas),'Basal')+kp(pc(th.bolT),'Bolus incl. SMB')+kp(th.smbT.toFixed(1)+' U','SMB / day')+kp(Math.round(th.carb)+' g','Carbs / day')+(th.sch>0?kp(Math.round(th.sum('bas')/th.sum('sch')*100)+'%','Basal delivered vs scheduled'):'')}</div>${rIns(thInsights(14))}
+    <h3>Insulin and carbs by day</h3>`+rTbl(['Day','Bolus U','SMB U','Basal U (est.)','Total U','Carbs g'],th.days.map((d,i)=>[i===0?'Today (so far)':fD(d.ds),d.bol.toFixed(1),d.smb.toFixed(1),d.bas.toFixed(1),'<b>'+(d.bol+d.smb+d.bas).toFixed(1)+'</b>',Math.round(d.car)])):'<p class="r-sub">No insulin data found in Nightscout for this period.</p>');
+  // 13 profile
+  const bb=BLK.map(()=>[0,0]);let q=0;for(let t=dayStart(13).getTime();t<dayStart(0).getTime();t+=3e5){const k=blkOf(t),m=t+15e4,sc=schedAt(t);while(q<SEG.length&&SEG[q].b<=m)q++;const g=SEG[q];bb[k][0]+=(g&&g.a<=m?g.rate:sc)/12;bb[k][1]+=sc/12}
+  P('Pump profile settings',profHTML().replace(/class="t"/,'class="r-t"')+(PF&&SEG.length?`<h3>Basal delivered vs scheduled by time of day · 14 days</h3>`+rTbl(['Time of day','Scheduled U','Delivered U','Delivered %'],BLK.map((b,i)=>[b[0]+' ('+hh(b[1])+'–'+hh(b[2]%24)+')',bb[i][1].toFixed(1),bb[i][0].toFixed(1),'<b>'+(bb[i][1]>0?Math.round(bb[i][0]/bb[i][1]*100):'—')+'%</b>'])):'')+'<p class="r-note">Profile as currently stored in Nightscout. Delivered basal is estimated from temp basals reported by the loop; consistent values well above or below 100% in one time block can point to a scheduled basal worth reviewing.</p>');
+  // 14 labs + methods
+  P('Lab results, visits & methods',(L.length?rTbl(['Date','A1C','Change','GMI at entry','Notes'],L.map((x,i)=>{const p=L[i+1],c=p?x.a1c-p.a1c:null;return[fmtD(x.d),'<b>'+x.a1c.toFixed(1)+'%</b>',c==null?'—':(c>0?'+':'')+c.toFixed(1),x.gmi?x.gmi.toFixed(1)+'%':'—',`<span class="r-l">${esc(x.note||'')}</span>`]})):'<p class="r-sub">No lab results entered.</p>')+
+   (lab?`<h3>Lab A1C vs sensor estimates</h3>`+rTbl(['Measure','Value','Window'],[['Lab A1C ('+fmtD(lab.d)+')','<b>'+lab.a1c.toFixed(1)+'%</b>','~3 months before draw'],...(s90?[['GMI',s90.gmi.toFixed(1)+'%','last 90 days ('+s90.cov.toFixed(0)+'% coverage)'],['eA1C (ADAG)',s90.ea1c.toFixed(1)+'%','last 90 days']]:[]),['GMI',s14.gmi.toFixed(1)+'%','last 14 days']]):'')+
+   `<h3>Definitions</h3><ul class="r-ul"><li><b>Time in range</b>: share of CGM readings ${conv(S.low)}–${conv(S.high)} ${U}.</li><li><b>CV</b>: standard deviation ÷ mean; ≤36% is considered stable.</li><li><b>GMI</b>: estimated A1C from mean CGM glucose (3.31 + 0.02392 × mg/dL).</li><li><b>eA1C</b>: older ADAG estimate, (mean + 46.7) ÷ 28.7, shown by some loop apps; usually reads lower than GMI.</li><li><b>Basal (est.)</b>: temp basal rates from the loop, with scheduled basal filling gaps.</li><li><b>SMB</b>: automatic super-micro-boluses delivered by the loop.</li></ul><p class="r-note">Generated ${new Date(now).toLocaleString()} from ${demo()?'demo data':'Nightscout'} by Nightstand Glucose. Patient-generated report for discussion with the care team; it does not provide dosing instructions.</p>`);
+  return pages.join('').replace(/__N__/g,pages.length)}
+function reportDoc(body){return`<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Glucose report ${new Date().toISOString().slice(0,10)}</title><style>body{margin:0;background:#e9ecf1;padding:18px 10px}${RCSS}@page{size:letter;margin:12mm}@media print{body{background:#fff;padding:0}.r-pg{box-shadow:none;margin:0;padding:0;max-width:none;break-after:page}.r-pg:last-child{break-after:auto}}</style></head><body class="r-doc">${body}</body></html>`}
+let repHTML='';
+function openReport(){const b=$('shareRep');b.textContent='Building…';
+  setTimeout(()=>{try{const body=reportBody();if(!body){b.textContent='No data yet';setTimeout(()=>b.textContent='Share report',2000);return}
+    repHTML=body;$('rpBody').innerHTML=body;$('report').hidden=false;$('report').scrollTop=0;$('rpMsg').textContent=''}catch(e){console.error(e);$('rpMsg').textContent='Could not build the report: '+e.message}finally{b.textContent='Share report'}},30)}
+function rpSay(t){$('rpMsg').textContent=t;clearTimeout(rpSay.t);rpSay.t=setTimeout(()=>$('rpMsg').textContent='',6000)}
+async function shareReport(){const doc=reportDoc(repHTML),name='Glucose report '+new Date().toISOString().slice(0,10)+'.html';
+  try{const f=new File([doc],name,{type:'text/html'});if(navigator.canShare&&navigator.canShare({files:[f]})){await navigator.share({files:[f],title:'Glucose report'});return}}catch(e){if(e&&e.name==='AbortError')return}
+  try{if(navigator.share){await navigator.share({title:'Glucose report',text:summaryText()});return}}catch(e){if(e&&e.name==='AbortError')return}
+  try{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([doc],{type:'text/html'}));a.download=name;document.body.append(a);a.click();a.remove();rpSay('Downloaded '+name+' — open it and print or attach it.')}catch(e){rpSay('Sharing is blocked here. Open your hosted (GitHub) page in Safari to share, or use Copy text.')}}
+{const st=document.createElement('style');st.textContent=RCSS+PRINT_CSS;document.head.append(st)}
+$('shareRep').onclick=openReport;
+$('rpClose').onclick=()=>{$('report').hidden=true};
+$('rpPrint').onclick=()=>{try{window.print()}catch(e){}rpSay('If no print window opened, open your hosted page in Safari or Chrome — this viewer blocks printing. In the print window choose “Save as PDF” for a PDF.')};
+$('rpShare').onclick=shareReport;
+$('rpCopy').onclick=async()=>{const t=summaryText();try{await navigator.clipboard.writeText(t);rpSay('Summary copied.')}catch(e){rpSay('Copy failed in this viewer.')}};
 
 function render(){const sl=applyTheme();tick();if(sl)drawSpark();else{drawChart();if(!$('rep').hidden)renderReports();if(!$('ther').hidden)renderTherapy()}}
 
