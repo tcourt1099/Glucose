@@ -288,8 +288,8 @@ const DEF={url:'',token:'',unit:'mgdl',vlow:54,low:70,high:180,vhigh:250,alarms:
 let S={...DEF};try{Object.assign(S,JSON.parse(localStorage.getItem('gs')||'{}'))}catch(e){}
 const PAL={
  day:{bg:'#080b11',panel:'#101722',panel2:'#18212e',line:'#26344a',ink:'#f4f7fb',mute:'#a3b0c2',ok:'#45ecbb',hi:'#ffc247',vhi:'#ff8c42',lo:'#ff5d7a',vlo:'#ff2e55',ins:'#7c9cff',carb:'#ffb45e',empty:'#0f151e'},
- night:{bg:'#000000',panel:'#140a05',panel2:'#1e1008',line:'#33190c',ink:'#ffc29a',mute:'#c48a66',ok:'#ffab5e',hi:'#ffd468',vhi:'#ffb44a',lo:'#ff5a4a',vlo:'#ff3a3a',ins:'#e0968a',carb:'#f2b878',empty:'#1a0d06'}};
-const LCS={day:{IOB:'#7c9cff',COB:'#ffb45e',UAM:'#e9d45a',ZT:'#4dd4e6',Loop:'#b79cff'},night:{IOB:'#e8798c',COB:'#f5c04a',UAM:'#a8c26a',ZT:'#9aa7a0',Loop:'#e8798c'}};
+ night:{bg:'#000000',panel:'#111114',panel2:'#1c1c1f',line:'#2a2a2e',ink:'#ffffff',mute:'#9a9aa0',ok:'#30d158',hi:'#ffd60a',vhi:'#ff9f0a',lo:'#ff453a',vlo:'#ff2d55',ins:'#1e90ff',carb:'#ff9f0a',empty:'#141416'}};
+const LCS={day:{IOB:'#1e90ff',COB:'#ffd60a',UAM:'#ff9f0a',ZT:'#64d2ff',Loop:'#bf5af2'},night:{IOB:'#1e90ff',COB:'#ffd60a',UAM:'#ff9f0a',ZT:'#64d2ff',Loop:'#bf5af2'}};
 let P=PAL.day,LC=LCS.day,themeKey='',night=false;
 const HIST=365,KEEP=HIST+1;let histFrom=0,backfilling=false;
 let D=[],TX=[],TB=[],SEG=[],PR=null,LP={},PF=null;
