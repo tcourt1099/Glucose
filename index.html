@@ -89,9 +89,10 @@ table.t{width:100%;border-collapse:collapse;background:var(--panel);border:1px s
 /* sleep view */
 #sleep{position:fixed;inset:0;z-index:5;background:var(--bg);display:none;flex-direction:column;gap:1.2vh;padding:max(1.8vh,env(safe-area-inset-top)) max(2.2vw,env(safe-area-inset-right)) max(1.2vh,env(safe-area-inset-bottom)) max(2.2vw,env(safe-area-inset-left));cursor:pointer}
 #sleep.show{display:flex}
-#sTop{display:flex;align-items:center;gap:12px}
-#sClock{font-size:clamp(22px,4.4vh,46px);font-weight:300;color:var(--mute);font-variant-numeric:tabular-nums;line-height:1}
-#sStat{margin-left:auto;font-size:clamp(12px,1.8vh,16px);color:var(--mute);text-align:right}
+#sTop{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px}
+#sClock{grid-column:2;font-size:clamp(44px,min(11vh,14vw),120px);font-weight:500;letter-spacing:-.02em;color:var(--ink);opacity:.82;font-variant-numeric:tabular-nums;line-height:1;text-align:center;white-space:nowrap}
+#sClock small{display:inline;font-size:.36em;font-weight:500;color:var(--mute);margin:0 0 0 .18em;letter-spacing:0}
+#sStat{grid-column:3;justify-self:end;font-size:clamp(12px,1.8vh,16px);color:var(--mute);text-align:right}
 #sStat.bad{color:var(--hi)}
 #sMain{display:flex;align-items:center;gap:2.4vw}
 #sHero{display:flex;flex-direction:column;flex:none}
@@ -444,7 +445,7 @@ function applyTheme(){const dim=inDim();night=forceSleep||S.nightView==='on'||(S
 
 /* ---------- now view ---------- */
 function tick(){const n=new Date(),tm=n.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
-  $('clock').textContent=tm;$('sClock').textContent=tm;$('date').textContent=n.toLocaleDateString([],{weekday:innerWidth<720?'short':'long',month:'short',day:'numeric'});
+  $('clock').textContent=tm;{const mm=/^(.*?)\s*([AaPp]\.?\s?[Mm]\.?)$/.exec(tm);$('sClock').innerHTML=mm?mm[1]+'<small>'+mm[2]+'</small>':tm}$('date').textContent=n.toLocaleDateString([],{weekday:innerWidth<720?'short':'long',month:'short',day:'numeric'});
   const l=D[D.length-1],st=$('status'),pill=$('pill');AL=null;
   if(!l){$('sChips').innerHTML='';$('sStat').textContent=demo()?'Demo':'Waiting for data';$('bg').textContent=$('sBg').textContent='---';st.textContent=demo()?'Demo':(ok?'Waiting for data':'No data');pill.className='bad';$('alert').style.display='none';return}
   const age=Math.round((Date.now()-l.t)/6e4),stale=age>15,c=stale?P.mute:col(l.v),ar=stale?'':arrowFor();
