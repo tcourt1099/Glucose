@@ -43,6 +43,13 @@ main{flex:1;min-height:0;display:grid;grid-template-columns:minmax(290px,37%) 1f
 #meta{font-size:clamp(15px,2.3vh,19px);color:var(--mute);margin-top:6px}
 #fc{font-size:clamp(14px,2.1vh,17px);color:var(--mute);margin-top:3px}
 #fc b{color:var(--ink);font-weight:600}
+.lpb{margin-top:10px;max-width:440px}
+.lpt{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;color:var(--mute);margin-bottom:4px;font-variant-numeric:tabular-nums}
+.lpk{height:6px;border-radius:99px;background:var(--panel2);overflow:hidden;box-shadow:inset 0 0 0 1px var(--line)}
+.lpk i{display:block;height:100%;width:0;border-radius:99px;transition:width 1s linear}
+#sLp{width:min(70vw,560px);margin:1vh auto 0;max-width:none}
+#sLp .lpt{font-size:clamp(12px,1.7vh,15px)}
+#sLp .lpk{height:clamp(5px,.8vh,9px)}
 #alert{display:none;margin-top:14px;padding:11px 14px;border-radius:14px;font-size:19px;font-weight:700;align-items:center;justify-content:space-between;gap:10px;color:#140608}
 #alert button{background:rgba(0,0,0,.78);color:#fff;border:0;font-size:14px;white-space:nowrap}
 .grp{margin-top:14px}
@@ -224,6 +231,7 @@ input,textarea{-webkit-user-select:text;user-select:text}
     <div id="hero"><div id="bg">---</div><div id="side"><div id="arrow"></div><div id="delta"></div></div></div>
     <div id="meta"></div>
     <div id="fc"></div>
+    <div class="lpb" id="lp"><div class="lpt"><span id="lpL">Next loop</span><span id="lpR"></span></div><div class="lpk"><i id="lpF"></i></div></div>
     <div id="alert"><span id="alertTxt"></span><button id="snooze">Snooze</button></div>
     <div id="groups"></div>
     <div id="reason"></div>
@@ -273,7 +281,7 @@ input,textarea{-webkit-user-select:text;user-select:text}
 <div id="sleep" role="button" aria-label="Tap to show details">
   <div id="sTop"><div id="sClock"></div><div id="sStat"></div></div>
   <div id="sMain">
-    <div id="sHero"><div id="sRow"><div id="sBg">---</div><div id="sSide"><div id="sArrow"></div><div id="sDelta"></div></div></div><div id="sMeta"></div><div id="sAlert"></div></div>
+    <div id="sHero"><div id="sRow"><div id="sBg">---</div><div id="sSide"><div id="sArrow"></div><div id="sDelta"></div></div></div><div id="sMeta"></div><div class="lpb" id="sLp"><div class="lpt"><span id="sLpL">Next loop</span><span id="sLpR"></span></div><div class="lpk"><i id="sLpF"></i></div></div><div id="sAlert"></div></div>
     <div id="sChips"></div>
   </div>
   <div id="sChartW"><canvas id="sChart"></canvas><div id="sLegend"></div></div>
@@ -1050,6 +1058,13 @@ let rz;addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(()=>{repVer
 $('dlg').addEventListener('close',()=>render());
 if(!demo()&&loadCache()){dataVer++;render();load(false)}else load(true);
 setInterval(render,20e3);
+// progress toward the next loop cycle (~5 min after the last loop run, or the last CGM reading if no loop data)
+function loopBar(){const n=Date.now(),l=D[D.length-1],t=LP.t||(l?l.t:0);let p=0,lt=LP.t?'Next loop':'Next reading',rt='--',c=P.ok;
+  if(t){const el=(n-t)/1e3,cyc=300;
+    if(el<=cyc+30){p=Math.min(1,el/cyc);const r=Math.max(0,cyc-el);rt=r>0?'in '+Math.floor(r/60)+':'+String(Math.floor(r%60)).padStart(2,'0'):'due now'}
+    else{p=1;const m=Math.floor(el/60);lt=LP.t?'Loop overdue':'Reading overdue';rt=m+' min since last';c=m>=15?P.lo:P.hi}}
+  for(const[f,a,b,w]of[['lpF','lpL','lpR','lp'],['sLpF','sLpL','sLpR','sLp']]){const fe=$(f);if(!fe)continue;fe.style.width=(p*100).toFixed(1)+'%';fe.style.background=c;$(a).textContent=lt;$(b).textContent=rt;$(w).style.display=t?'':'none'}}
+loopBar();setInterval(loopBar,1000);
 try{if(demo()&&!localStorage.getItem('gs_seen')){localStorage.setItem('gs_seen','1');$('cfg').click()}}catch(e){}
 </script>
 </body>
